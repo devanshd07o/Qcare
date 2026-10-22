@@ -1,5 +1,19 @@
 import React, { useEffect } from 'react';
-import { useHospitalStore, setHospitalByCodeAction, navigateBackAction, isInternalNavigationBack } from './store/useHospitalStore';
+import {
+  useHospitalStore,
+  setHospitalByCodeAction,
+  navigateBackAction,
+  isInternalNavigationBack,
+  getHospitalState,
+  loginDoctorAction,
+  loginLabTechAction,
+  selectAndLoginPatientAction,
+  registerPatientAction,
+  prescribeTestsAction,
+  callPatientAction,
+  completeTestAndUploadReportAction,
+  signOutAction
+} from './store/useHospitalStore';
 import { AuthScreen } from './components/auth/AuthScreen';
 import { Header } from './components/common/Header';
 import { DoctorPortal } from './components/doctor/DoctorPortal';
@@ -22,6 +36,17 @@ export default function App() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       (window as any).__hospitalStore = useHospitalStore;
+      (window as any).__qcare = {
+        getState: getHospitalState,
+        loginDoctor: loginDoctorAction,
+        loginLabTech: loginLabTechAction,
+        selectAndLoginPatient: selectAndLoginPatientAction,
+        registerPatient: registerPatientAction,
+        prescribeTests: prescribeTestsAction,
+        callPatient: callPatientAction,
+        completeTestAndUploadReport: completeTestAndUploadReportAction,
+        signOut: signOutAction
+      };
     }
   }, []);
 
