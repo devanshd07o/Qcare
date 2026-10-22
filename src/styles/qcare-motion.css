@@ -1,0 +1,45 @@
+/* QCare patient portal — shared motion + surface tokens */
+.qc-root { --qc-ink:#0f172a; --qc-muted:#64748b; --qc-line:rgba(226,232,240,.9); --qc-accent:#0f766e; --qc-ease:cubic-bezier(.22,.8,.3,1); }
+
+@keyframes qc-rise { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+@keyframes qc-fade { from { opacity:0; } to { opacity:1; } }
+@keyframes qc-sheet { from { opacity:0; transform:translateY(18px) scale(.985); } to { opacity:1; transform:none; } }
+@keyframes qc-ring { 0% { box-shadow:0 0 0 0 rgba(15,118,110,.28); } 70%,100% { box-shadow:0 0 0 9px rgba(15,118,110,0); } }
+@keyframes qc-ring-amber { 0% { box-shadow:0 0 0 0 rgba(217,119,6,.32); } 70%,100% { box-shadow:0 0 0 9px rgba(217,119,6,0); } }
+@keyframes qc-march { to { stroke-dashoffset:-28; } }
+@keyframes qc-fill { from { transform:scaleX(0); } to { transform:scaleX(1); } }
+@keyframes qc-draw { from { stroke-dashoffset:var(--len,600); } to { stroke-dashoffset:0; } }
+@keyframes qc-beacon { 0% { r:5; opacity:.55; } 100% { r:16; opacity:0; } }
+
+.qc-rise { animation: qc-rise .5s var(--qc-ease) both; }
+.qc-fade { animation: qc-fade .3s ease both; }
+.qc-sheet { animation: qc-sheet .38s var(--qc-ease) both; }
+.qc-d1 { animation-delay:.05s; } .qc-d2 { animation-delay:.1s; } .qc-d3 { animation-delay:.16s; } .qc-d4 { animation-delay:.22s; }
+.qc-ring { animation: qc-ring 2.2s ease-out infinite; }
+.qc-ring-amber { animation: qc-ring-amber 1.8s ease-out infinite; }
+.qc-march { animation: qc-march 1.1s linear infinite; }
+.qc-bar { transform-origin:left; animation: qc-fill .9s var(--qc-ease) both; }
+.qc-beacon { animation: qc-beacon 1.8s ease-out infinite; }
+
+.qc-card { background:#fff; border:1px solid var(--qc-line); border-radius:18px; box-shadow:0 1px 2px rgba(15,23,42,.04), 0 8px 24px -16px rgba(15,23,42,.12); }
+.qc-lift { transition: transform .22s var(--qc-ease), box-shadow .22s var(--qc-ease), border-color .22s ease; }
+.qc-lift:hover { transform:translateY(-1px); box-shadow:0 2px 4px rgba(15,23,42,.05), 0 14px 28px -14px rgba(15,23,42,.18); }
+.qc-press:active { transform:scale(.98); }
+.qc-label { font-size:10px; font-weight:600; letter-spacing:.09em; text-transform:uppercase; color:#94a3b8; }
+.qc-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+.qc-ticket-stub { background-image: linear-gradient(to bottom, #cbd5e1 50%, transparent 50%); background-size:1px 8px; background-repeat:repeat-y; background-position:left top; }
+@media (max-width:1023px){ .qc-ticket-stub { background-image: linear-gradient(to right, #cbd5e1 50%, transparent 50%); background-size:8px 1px; background-repeat:repeat-x; background-position:left top; } }
+.qc-focus:focus-visible { outline:2px solid #0f766e; outline-offset:2px; }
+
+@media print { .qc-noprint { display:none !important; } .qc-card { box-shadow:none; break-inside:avoid; } }
+@media (prefers-reduced-motion: reduce) {
+  .qc-rise,.qc-fade,.qc-sheet,.qc-ring,.qc-ring-amber,.qc-march,.qc-bar,.qc-beacon { animation:none !important; }
+  .qc-lift,.qc-press { transition:none !important; }
+}
+
+/* Floor plan rooms */
+.qc-room { cursor:pointer; outline:none; }
+.qc-room .qc-body { transition: fill .25s ease, stroke .25s ease, stroke-width .25s ease; }
+.qc-room:hover .qc-body:not(.sel) { fill:#f8fafc; stroke:#94a3b8; }
+.qc-room:focus-visible .qc-body { stroke:#0f766e; stroke-width:3; }
+.qc-plan-in { animation: qc-fade .45s ease both; }
