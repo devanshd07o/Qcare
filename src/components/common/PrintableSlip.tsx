@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { Patient, DiagnosticTest, Department } from '../../types';
 import { useHospitalStore } from '../../store/useHospitalStore';
-import { Printer, X, ShieldCheck, QrCode as QrIcon, ExternalLink, ArrowRight } from 'lucide-react';
+import { estimateWalkinInvestigations } from '../../engine/labTurnaroundEngine';
+import { X, QrCode as QrIcon } from 'lucide-react';
 
 interface PrintableSlipProps {
   patient: Patient;
@@ -17,16 +18,34 @@ export const PrintableSlip: React.FC<PrintableSlipProps> = ({
   departments,
   onClose
 }) => {
-  const { currentHospital, selectAndLoginPatient } = useHospitalStore();
+  const { currentHospital, selectAndLoginPatient, counters, queueTokens, clinicalReports } = useHospitalStore();
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
-  const [scanUrl, setScanUrl] = useState<string>('');
+
+  const slipEstimate = React.useMemo(
+    () =>
+      estimateWalkinInvestigations(patient.prescribedTests, {
+        tests,
+        departments,
+        counters,
+        queueTokens,
+        clinicalReports,
+        doctorPriority: patient.doctorPriority || 'normal',
+        excludePatientId: patient.id
+      }),
+    [patient.id, patient.prescribedTests, patient.doctorPriority, tests, departments, counters, queueTokens, clinicalReports]
+  );
+
+  // Lock body scroll while modal open
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
   useEffect(() => {
@@ -46,238 +65,241 @@ export const PrintableSlip: React.FC<PrintableSlipProps> = ({
       locked: patient.currentLockedDestinationTestId
     };
     const payloadEncoded = encodeURIComponent(btoa(JSON.stringify(payloadObj)));
-    const targetUrl = `${origin}/?session=${patient.qrSessionId}&p=${payloadEncoded}`;
-    setScanUrl(targetUrl);
+    // Unique per patient via qrSessionId — different QR for every patient
+    const url = `${origin}/?session=${patient.qrSessionId}&p=${payloadEncoded}`;
     setQrCodeDataUrl('');
 
-    QRCode.toDataURL(targetUrl, {
-      width: 240,
-      margin: 1,
-      color: {
-        dark: '#000000',
-        light: '#FFFFFF'
-      }
+    QRCode.toDataURL(url, {
+      width: 280,
+      margin: 2,
+      errorCorrectionLevel: 'M',
+      color: { dark: '#0f172a', light: '#ffffff' }
     })
-      .then(url => setQrCodeDataUrl(url))
+      .then(d => setQrCodeDataUrl(d))
       .catch(() => {});
   }, [patient.id, patient.uhid, patient.qrSessionId, JSON.stringify(patient.prescribedTests)]);
 
-  const handlePrint = () => {
-    if (typeof window !== 'undefined') {
-      window.print();
-    }
-  };
-
-  const handleOpenPatientPass = () => {
-    // 1. Close modal
-    onClose();
-    // 2. Authenticate and switch directly into patient's Live Boarding Pass view!
-    selectAndLoginPatient(patient.id);
-  };
+  const handleOpenPatientPass = () => { onClose(); selectAndLoginPatient(patient.id); };
 
   const prescribedList = patient.prescribedTests.map(id => {
     const test = tests.find(t => t.id === id);
     const dept = test ? departments.find(d => d.id === test.departmentId) : undefined;
     return { test, dept };
   });
+  const hasTests = prescribedList.length > 0;
 
   return (
+    // Overlay — light washout, no blur, background fully visible
     <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      className="printable-slip-wrapper fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs overflow-y-auto p-4 sm:p-6 flex justify-center items-start print:static print:bg-transparent print:p-0 animate-fadeIn"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 print:static print:p-0"
+      style={{ background: 'rgba(15,23,42,0.18)' }}
     >
-      <div className="printable-slip-card bg-white rounded-2xl shadow-2xl max-w-md w-full my-4 sm:my-8 overflow-hidden border border-slate-200 print:border-none print:shadow-none print:max-w-full print:my-0">
-        
-        {/* Modal Controls Header */}
-        <div className="sticky top-0 z-20 flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-white print:hidden">
-          <div className="flex items-center gap-2">
-            <Printer className="w-4 h-4 text-teal-700" />
-            <span className="font-bold text-slate-900 text-sm">
-              Printable Thermal QR Slip
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Print Slip</span>
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
-              aria-label="Close modal"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+      {/*
+        Wrapper div — relative, same max-width as card.
+        X button floats just above the card's top-right corner.
+      */}
+      <div className="relative w-full" style={{ maxWidth: 620 }}>
 
-        {/* Authentic Thermal Slip Content */}
-        <div className="p-5 sm:p-6 font-mono text-xs text-slate-900 bg-white selection:bg-none print:p-0">
-          <div className="border border-dashed border-slate-300 p-5 rounded-xl bg-slate-50/50">
-            
-            {/* Slip Header */}
-            <div className="text-center pb-3 border-b border-dashed border-slate-300">
-              <h2 className="font-bold text-base tracking-tight text-slate-900 uppercase font-sans">
-                {currentHospital.name}
-              </h2>
-              <p className="text-[11px] text-slate-600 mt-0.5 font-sans">
-                {patient.prescribedDoctorName} • {patient.prescribedDoctorRoom}
-              </p>
-              <p className="text-[10px] text-slate-500 mt-0.5">
-                {currentHospital.address} • Ph: {currentHospital.contactNumber || '+91 11 4100 2200'}
-              </p>
-            </div>
+        {/* ── Close button — above card, right side, pill shape ── */}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          data-tooltip="Close"
+          className="absolute right-0 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 hover:bg-white text-slate-500 hover:text-slate-900 shadow-sm text-[11px] font-medium transition-colors duration-150 cursor-pointer print:hidden"
+          style={{ bottom: 'calc(100% + 8px)' }}
+        >
+          <X className="w-3.5 h-3.5" />
+          Close
+        </button>
 
-            {/* Token & Patient Metadata */}
-            <div className="py-3 border-b border-dashed border-slate-300 space-y-1.5">
-              <div className="flex justify-between items-baseline font-bold text-sm text-slate-900">
-                <span className="bg-teal-50 text-teal-900 px-2 py-0.5 rounded border border-teal-200">
-                  TOKEN: {patient.opdTokenNumber}
-                </span>
-                <span className="text-[11px] font-normal text-slate-500">
-                  {patient.registrationTime}
-                </span>
+        {/* ── Card ── */}
+        <div
+          className="printable-slip-card relative bg-white w-full rounded-2xl shadow-2xl print:shadow-none overflow-hidden"
+          style={{ maxHeight: 'calc(100dvh - 72px)' }}
+        >
+          {/* QCare watermark — faint, left col background, center */}
+          <img
+            src="/logo.png"
+            alt=""
+            aria-hidden="true"
+            className="pointer-events-none select-none absolute opacity-[0.04] grayscale"
+            style={{
+              zIndex: 0,
+              width: 180,
+              bottom: 24,
+              left: 24,
+              transform: 'rotate(-6deg)'
+            }}
+          />
+
+          {/* Teal accent line at top */}
+          <div
+            className="absolute top-0 left-0 right-0 h-[3px]"
+            style={{
+              background: 'linear-gradient(90deg, var(--accent-primary, #0f766e) 0%, #0d9488 55%, transparent 100%)',
+              zIndex: 2
+            }}
+            aria-hidden="true"
+          />
+
+          {/* ══ Two-column body ══ */}
+          <div
+            className="relative flex flex-col sm:flex-row"
+            style={{ zIndex: 1 }}
+          >
+
+            {/* ── LEFT: identity + route (fixed height, no scroll on col itself) ── */}
+            <div className="flex-1 min-w-0 px-6 pt-6 pb-6 flex flex-col gap-4">
+
+              {/* Hospital + Doctor */}
+              <div>
+                <p className="text-[13px] font-semibold text-slate-900 leading-tight">
+                  {currentHospital.name}
+                </p>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  {patient.prescribedDoctorName}
+                  {patient.prescribedDoctorRoom ? ` · ${patient.prescribedDoctorRoom}` : ''}
+                </p>
               </div>
-              <div className="flex justify-between text-xs pt-1">
-                <span className="font-semibold text-slate-800">PATIENT: {patient.name}</span>
-                <span className="text-slate-600">{patient.age} / {patient.gender}</span>
-              </div>
-              <div className="flex justify-between text-[11px] text-slate-500">
-                <span>UHID: {patient.uhid}</span>
-                <span>{patient.contact}</span>
-              </div>
-              {patient.priority === 'emergency' && (
-                <div className="mt-1 text-center py-1 bg-red-600 text-white font-bold text-[10px] rounded uppercase tracking-wider">
-                  🚨 EMERGENCY TRIAGE PRIORITY 🚨
-                </div>
-              )}
-            </div>
 
-            {/* Scannable Real QR Code + One-Click Navigation Button */}
-            <div className="py-4 text-center border-b border-dashed border-slate-300 flex flex-col items-center bg-white rounded-xl my-2 p-3 shadow-2xs border border-slate-100">
-              {qrCodeDataUrl ? (
-                <img
-                  src={qrCodeDataUrl}
-                  alt={`QR for ${patient.uhid}`}
-                  className="w-40 h-40 border border-slate-300 p-1.5 bg-white rounded-xl shadow-xs"
-                />
-              ) : (
-                <div className="w-40 h-40 border border-slate-200 flex items-center justify-center text-slate-400 bg-slate-50 rounded-xl">
-                  <QrIcon className="w-10 h-10 animate-pulse text-slate-400" />
-                </div>
-              )}
-
-              {/* Direct One-Click Navigation CTA (User Request) */}
-              <div className="mt-3.5 w-full flex flex-col items-center gap-2 print:hidden">
-                <button
-                  type="button"
-                  onClick={handleOpenPatientPass}
-                  className="w-full max-w-xs py-2.5 px-4 bg-teal-700 hover:bg-teal-800 active:bg-teal-900 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-md shadow-teal-900/10 transition-all cursor-pointer hover:scale-[1.02]"
-                  title="Click to directly open patient live boarding pass in this app"
+              {/* Token + Name */}
+              <div className="space-y-1">
+                <p className="font-mono text-[11px] text-teal-600 tabular-nums tracking-widest uppercase">
+                  {patient.opdTokenNumber} · {patient.registrationTime}
+                </p>
+                <h2
+                  className="text-[26px] font-bold text-slate-900 leading-tight tracking-tight"
+                  style={{ textWrap: 'balance' }}
                 >
-                  <span>Click Here to Open Live Boarding Pass</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-                
-                {scanUrl && (
-                  <a
-                    href={scanUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[11px] text-teal-700 hover:text-teal-900 hover:underline flex items-center gap-1 font-sans font-medium"
-                    title="Or open patient pass in a new browser window"
-                  >
-                    <span>Or open in new browser window</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
+                  {patient.name}
+                </h2>
+                <p className="text-xs text-slate-400 tabular-nums">
+                  {patient.age} y · {patient.gender} · {patient.uhid}
+                </p>
+              </div>
+
+              {patient.priority === 'emergency' && (
+                <p className="text-[11px] font-bold text-red-600 uppercase tracking-widest border-l-2 border-red-500 pl-2">
+                  Emergency Triage
+                </p>
+              )}
+
+              {/* Divider */}
+              <div className="border-t border-slate-100" />
+
+              {/* Investigations header (sticky label) */}
+              <div className="flex items-baseline justify-between shrink-0">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+                  {hasTests ? 'Investigations' : 'Route'}
+                </p>
+                {hasTests && slipEstimate.totalEstimatedMinutes > 0 && (
+                  <p className="text-[10px] text-teal-600 tabular-nums">
+                    ~{slipEstimate.totalEstimatedMinutes} min · {slipEstimate.readyAtTime}
+                  </p>
                 )}
               </div>
 
-              <p className="mt-3 font-bold text-[11px] text-slate-800 font-sans uppercase tracking-tight">
-                SCAN WITH ANY PHONE CAMERA
-              </p>
-              <p className="text-[10px] text-slate-500 font-sans">
-                Opens live boarding pass & real-time queue position
-              </p>
-            </div>
-
-            {/* Prescribed Investigations Checklist */}
-            <div className="pt-3">
-              <p className="font-bold text-[11px] uppercase tracking-wider mb-2 text-slate-900 font-sans">
-                {prescribedList.length > 0 ? 'INVESTIGATION ROUTE:' : 'OUTPATIENT ROUTE:'}
-              </p>
-              <ol className="space-y-2">
-                {prescribedList.length === 0 ? (
-                  <>
-                    <li className="text-[11px]">
-                      <div className="flex justify-between font-semibold text-slate-900">
-                        <span>1. Initial OPD Consultation: {patient.prescribedDoctorName || currentHospital.doctorName}</span>
-                        <span className="text-teal-800 font-bold">{patient.prescribedDoctorRoom || currentHospital.doctorRoom}</span>
-                      </div>
-                      <p className="text-[10px] text-slate-500">Present this slip at doctor chamber for initial clinical examination.</p>
-                    </li>
-                    <li className="text-[11px] pt-1 border-t border-dashed border-slate-200 text-slate-500">
-                      <span>2. Prescribed tests will automatically route on your live pass upon scanning the QR code above.</span>
-                    </li>
-                  </>
+              {/* ── Investigations list — INTERNAL SCROLL only here ── */}
+              <div
+                className="overflow-y-auto divide-y divide-slate-50"
+                style={{ maxHeight: 180 }}
+              >
+                {!hasTests ? (
+                  <div className="py-2.5 flex gap-3">
+                    <span className="font-mono text-[10px] text-slate-300 w-3 shrink-0 tabular-nums pt-px">1</span>
+                    <div>
+                      <p className="text-[12px] font-semibold text-slate-800">OPD Consultation</p>
+                      <p className="text-[11px] text-slate-400">
+                        {patient.prescribedDoctorName} · {patient.prescribedDoctorRoom}
+                      </p>
+                    </div>
+                  </div>
                 ) : (
                   <>
                     {prescribedList.map(({ test, dept }, idx) => (
-                      <li key={test?.id || idx} className="text-[11px]">
-                        <div className="flex justify-between font-semibold text-slate-900">
-                          <span>{idx + 1}. {test?.name}</span>
-                          <span className="text-teal-800 font-bold">{dept?.location.room} · {dept?.location.floor}</span>
+                      <div key={test?.id || idx} className="py-2.5 flex gap-3">
+                        <span className="font-mono text-[10px] text-slate-300 w-3 shrink-0 tabular-nums pt-px">
+                          {idx + 1}
+                        </span>
+                        <div>
+                          <p className="text-[12px] font-semibold text-slate-800 leading-snug">{test?.name}</p>
+                          <p className="text-[11px] text-slate-400">{dept?.location.room} · {dept?.location.floor}</p>
                         </div>
-                        <div className="text-[10px] text-slate-500 flex justify-between">
-                          <span>{test?.technicalName}</span>
-                          <span>{dept?.location.building || currentHospital.shortName}</span>
-                        </div>
-                        {dept?.location.directions && (
-                          <p className="text-[9.5px] text-teal-900/80 bg-teal-50/60 p-1 rounded mt-0.5 font-sans leading-tight">
-                            Route: {dept.location.directions}
-                          </p>
-                        )}
-                        {test?.preparationNotes && (
-                          <p className="text-[10px] text-amber-800 italic mt-0.5">
-                            * {test.preparationNotes}
-                          </p>
-                        )}
-                      </li>
-                    ))}
-                    <li className="text-[11px] pt-1.5 border-t border-dashed border-slate-200">
-                      <div className="flex justify-between font-semibold text-slate-900">
-                        <span>{prescribedList.length + 1}. Return to {patient.prescribedDoctorName || currentHospital.doctorName}</span>
-                        <span className="text-teal-800 font-bold">{patient.prescribedDoctorRoom || currentHospital.doctorRoom}</span>
                       </div>
-                      <p className="text-[10px] text-slate-500">Final report review & medicine prescription</p>
-                    </li>
+                    ))}
+                    <div className="py-2.5 flex gap-3">
+                      <span className="font-mono text-[10px] text-slate-300 w-3 shrink-0 tabular-nums pt-px">
+                        {prescribedList.length + 1}
+                      </span>
+                      <div>
+                        <p className="text-[12px] font-semibold text-slate-800">
+                          Return · {patient.prescribedDoctorName}
+                        </p>
+                        <p className="text-[11px] text-slate-400">{patient.prescribedDoctorRoom}</p>
+                      </div>
+                    </div>
                   </>
                 )}
-              </ol>
+              </div>
+
             </div>
 
-            {/* Footer */}
-            <div className="mt-4 pt-3 border-t border-dashed border-slate-300 text-center text-[10px] text-slate-500 flex items-center justify-center gap-1.5 font-sans">
-              <ShieldCheck className="w-3.5 h-3.5 text-teal-700" />
-              <span>QCare Smart Flow · Hospital Diagnostic Pass</span>
+            {/* ── Perforation divider ── */}
+            <div
+              className="hidden sm:flex flex-col items-center w-px relative shrink-0"
+              aria-hidden="true"
+            >
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-white border border-slate-100 shadow-sm" />
+              <div className="flex-1 w-full border-l border-dashed border-slate-200" />
+              <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-white border border-slate-100 shadow-sm" />
             </div>
 
-            {/* Modal Bottom Actions (Web only) */}
-            <div className="mt-4 pt-2 flex items-center gap-2 print:hidden font-sans">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 py-2 px-3 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition-colors cursor-pointer text-center"
-              >
-                Done / Close
-              </button>
+            {/* ── RIGHT: QR dominant + actions ── */}
+            <div
+              className="sm:w-[204px] shrink-0 flex flex-col items-center justify-between gap-5 px-6 py-7 border-t sm:border-t-0 border-slate-100 print:hidden"
+              style={{ background: 'linear-gradient(160deg, #f0fdf9 0%, #ffffff 60%)' }}
+            >
+
+              {/* QR — hero element, largest thing in the right col */}
+              <div className="flex flex-col items-center gap-2.5 w-full">
+                {qrCodeDataUrl ? (
+                  <img
+                    src={qrCodeDataUrl}
+                    alt={`QR — ${patient.uhid}`}
+                    className="w-[164px] h-[164px] rounded-xl bg-white"
+                    draggable={false}
+                  />
+                ) : (
+                  <div className="w-[164px] h-[164px] rounded-xl bg-white border border-slate-100 flex items-center justify-center">
+                    <QrIcon className="w-9 h-9 text-slate-300 animate-pulse" />
+                  </div>
+                )}
+                <p className="text-[10px] text-slate-400 text-center">Scan to open live pass</p>
+                <p className="font-mono text-[9.5px] text-teal-500 tabular-nums">{patient.uhid}</p>
+              </div>
+
+              {/* Actions — 2 only */}
+              <div className="w-full space-y-2">
+                <button
+                  type="button"
+                  onClick={handleOpenPatientPass}
+                  data-tooltip="Open patient live boarding pass"
+                  className="w-full py-2.5 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-semibold transition-colors duration-150 cursor-pointer"
+                >
+                  Open Live Pass
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  data-tooltip="Print or save as PDF"
+                  className="w-full py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-500 text-[11px] font-medium transition-colors duration-150 cursor-pointer"
+                >
+                  Print / Save PDF
+                </button>
+              </div>
+
             </div>
           </div>
         </div>

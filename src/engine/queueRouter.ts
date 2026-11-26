@@ -54,7 +54,8 @@ export function calculateDepartmentCurrentWait(
   tokens: QueueToken[],
   counters: Counter[],
   patientId?: string,
-  departments?: Department[]
+  departments?: Department[],
+  deptServiceOverride?: number
 ): {
   waitMinutes: number;
   waitingCount: number;
@@ -79,14 +80,17 @@ export function calculateDepartmentCurrentWait(
         ? (activeCounters.length > 0 ? Math.max(activeCounters.length, dept.activeMachines) : dept.activeMachines)
         : Math.max(1, activeCounters.length));
 
-  const avgService = activeCounters.length > 0
-    ? activeCounters.reduce((acc, c) => acc + (c.averageServiceMinutes || 6.0), 0) / activeCounters.length
-    : 6.0;
+  const avgService =
+    typeof deptServiceOverride === 'number' && deptServiceOverride > 0
+      ? deptServiceOverride
+      : activeCounters.length > 0
+        ? activeCounters.reduce((acc, c) => acc + (c.averageServiceMinutes || 6.0), 0) / activeCounters.length
+        : 6.0;
 
-  // Count active tokens currently waiting in queue (excluding patient's own token)
+  // Count active tokens currently waiting, called, or in progress (excluding patient's own token)
   const waitingTokens = tokens.filter(
     t => t.departmentId === deptId &&
-         (t.status === 'waiting' || t.status === 'in_progress') &&
+         (t.status === 'waiting' || t.status === 'called' || t.status === 'in_progress') &&
          (!patientId || t.patientId !== patientId)
   );
   const waitingCount = waitingTokens.length;
@@ -116,9 +120,10 @@ function estimateProjectedWait(
   counters: Counter[],
   patientId?: string,
   departments?: Department[],
-  projectedLoadCount: number = 0
+  projectedLoadCount: number = 0,
+  deptServiceOverride?: number
 ): number {
-  const current = calculateDepartmentCurrentWait(deptId, tokens, counters, patientId, departments);
+  const current = calculateDepartmentCurrentWait(deptId, tokens, counters, patientId, departments, deptServiceOverride);
   if (current.isClosed) {
     return current.waitMinutes;
   }
@@ -233,7 +238,9 @@ function evaluateSequence(
   patientId?: string,
   projectedLoadMap: Record<string, number> = {},
   doctorPriority: DoctorPriority = 'normal',
-  completedTestIds: string[] = []
+  completedTestIds: string[] = [],
+  testDurationOverrides: Record<string, number> = {},
+  deptServiceOverrides: Record<string, number> = {}
 ): {
   totalTime: number;
   steps: RouteStep[];
@@ -265,7 +272,8 @@ function evaluateSequence(
       counters,
       patientId,
       departments,
-      projectedLoad
+      projectedLoad,
+      deptServiceOverrides[test.departmentId]
     );
 
     if (projectedWait > 25 && dept) {
@@ -274,7 +282,13 @@ function evaluateSequence(
       }
     }
 
-    const testDuration = (test.averageDurationMinutes && test.averageDurationMinutes > 0) ? test.averageDurationMinutes : 6;
+    const overrideDur = testDurationOverrides[test.id];
+    const testDuration =
+      typeof overrideDur === 'number' && overrideDur > 0
+        ? overrideDur
+        : (test.averageDurationMinutes && test.averageDurationMinutes > 0)
+          ? test.averageDurationMinutes
+          : 6;
     const startOffset = currentTimeOffset + projectedWait;
     const endOffset = startOffset + testDuration;
 
@@ -395,7 +409,9 @@ export function calculateOptimalQueueRoute(
   departments: Department[],
   tokens: QueueToken[],
   counters: Counter[],
-  projectedLoadMap: Record<string, number> = {}
+  projectedLoadMap: Record<string, number> = {},
+  testDurationOverrides: Record<string, number> = {},
+  deptServiceOverrides: Record<string, number> = {}
 ): QueueRoutingPlan {
   const completedTestIds = patient.completedTests || [];
 
@@ -488,7 +504,9 @@ export function calculateOptimalQueueRoute(
     patient.id,
     projectedLoadMap,
     patientDoctorPriority,
-    completedTestIds
+    completedTestIds,
+    testDurationOverrides,
+    deptServiceOverrides
   );
 
   const getEvaluationScore = (ev: { totalTime: number; penaltyScore: number }) =>
@@ -504,7 +522,9 @@ export function calculateOptimalQueueRoute(
     patient.id,
     projectedLoadMap,
     patientDoctorPriority,
-    completedTestIds
+    completedTestIds,
+    testDurationOverrides,
+    deptServiceOverrides
   );
 
   for (const perm of candidatePermutations) {
@@ -517,7 +537,9 @@ export function calculateOptimalQueueRoute(
       patient.id,
       projectedLoadMap,
       patientDoctorPriority,
-      completedTestIds
+      completedTestIds,
+      testDurationOverrides,
+      deptServiceOverrides
     );
     if (getEvaluationScore(evaluation) < getEvaluationScore(bestEvaluation)) {
       bestEvaluation = evaluation;

@@ -169,10 +169,10 @@ export const GlobalSearchModal: React.FC = () => {
                 key={cat.id}
                 type="button"
                 onClick={() => setSelectedCategory(cat.id)}
-                className={`px-3 py-1 text-xs font-semibold rounded-full transition-all cursor-pointer ${
+                className={`px-3 py-1 text-xs font-semibold rounded-full transition-[background-color,border-color,color] duration-150 cursor-pointer ${
                   selectedCategory === cat.id
-                    ? 'bg-slate-900 text-white shadow-2xs'
-                    : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200'
+                    ? 'bg-slate-900 text-white border border-slate-950 qcare-pill-3d-solid'
+                    : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 qcare-pill-3d'
                 }`}
               >
                 {cat.label}
@@ -209,7 +209,7 @@ export const GlobalSearchModal: React.FC = () => {
                     <span className="font-bold text-xs sm:text-sm text-slate-900">
                       {item.name}
                     </span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-blue-50 text-blue-700 border border-blue-200 qcare-pill-3d">
                       {item.uhid}
                     </span>
                     <span className="text-[11px] text-slate-500 font-medium">

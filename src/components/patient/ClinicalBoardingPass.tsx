@@ -39,6 +39,7 @@ interface ClinicalBoardingPassProps {
   onOpenRadar?: () => void;
   onOpenSimulator?: () => void;
   onPrintSlip?: () => void;
+  hideProfileStrip?: boolean;
 }
 
 export const ClinicalBoardingPass: React.FC<ClinicalBoardingPassProps> = ({
@@ -61,7 +62,8 @@ export const ClinicalBoardingPass: React.FC<ClinicalBoardingPassProps> = ({
   onSelectManualTest,
   onViewReports,
   onOpenRadar,
-  onPrintSlip
+  onPrintSlip,
+  hideProfileStrip = false
 }) => {
   const { markTestCompletedByPatient, clinicalReports } = useHospitalStore();
   const t = TRANSLATIONS[language];
@@ -205,7 +207,8 @@ export const ClinicalBoardingPass: React.FC<ClinicalBoardingPassProps> = ({
   return (
     <div className="space-y-6">
       
-      {/* 1. Patient Profile Strip */}
+      {/* 1. Patient Profile Strip (suppressed when embedded under PatientView header to prevent duplication) */}
+      {!hideProfileStrip && (
       <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-sm p-3.5 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-teal-50 border border-teal-200 text-teal-800 flex items-center justify-center font-bold shrink-0">
@@ -216,7 +219,7 @@ export const ClinicalBoardingPass: React.FC<ClinicalBoardingPassProps> = ({
               <h2 className="text-base sm:text-lg font-extrabold text-obsidian-900 tracking-tight truncate">
                 {patient.name}
               </h2>
-              <span className="text-[11px] sm:text-xs font-bold text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-200 tabular-nums">
+              <span className="text-[11px] sm:text-xs font-bold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200 tabular-nums">
                 {patient.uhid}
               </span>
               <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full tabular-nums">
@@ -250,12 +253,13 @@ export const ClinicalBoardingPass: React.FC<ClinicalBoardingPassProps> = ({
 
           <div className="text-right">
             <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold uppercase block">{t.token}</span>
-            <span className="text-sm sm:text-base font-extrabold text-teal-800 bg-teal-50 px-3 py-1 rounded-2xl border border-teal-200 inline-block tabular-nums shadow-2xs">
+            <span className="text-sm sm:text-base font-extrabold text-slate-900 bg-slate-100 px-3 py-1 rounded-xl border border-slate-200 inline-block tabular-nums">
               {activeTokenNumber}
             </span>
           </div>
         </div>
       </div>
+      )}
 
       {/* Urgent Doctor Priority Alert Banner */}
       {patient.doctorPriority === 'urgent' && (
@@ -293,10 +297,16 @@ export const ClinicalBoardingPass: React.FC<ClinicalBoardingPassProps> = ({
         {/* Animated Direction Indicator (Rule 4) */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide shadow-xs ${directiveBadgeColor}`}>
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide qcare-pill-3d-solid ${directiveBadgeColor}`}>
               <Zap className="w-3.5 h-3.5 fill-current" />
               <span>{directiveBadge}</span>
             </span>
+
+            {hideProfileStrip && (
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200 tabular-nums">
+                {t.token} {activeTokenNumber}
+              </span>
+            )}
 
             {/* If patient manually selected a test, offer 1-click Reset to AI Recommended */}
             {isManualActive && (

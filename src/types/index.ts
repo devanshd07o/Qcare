@@ -44,6 +44,8 @@ export interface ClinicalReport {
   counterId: string;
   roomNo: string;
   timestamp: string;
+  createdAtMs?: number;
+  actualTurnaroundMinutes?: number;
   status: 'pending' | 'uploaded' | 'verified_by_doctor';
   summary: string;
   metrics: ClinicalMetric[];
@@ -141,8 +143,11 @@ export interface QueueToken {
   doctorPriority?: DoctorPriority;
   status: TokenStatus;
   issuedAt: string;
+  issuedAtMs?: number;
   calledAt?: string;
+  calledAtMs?: number;
   completedAt?: string;
+  completedAtMs?: number;
   queuePosition: number;
   estimatedWaitMinutes: number;
 }
@@ -171,6 +176,7 @@ export interface Patient {
   status: 'registered' | 'in_transit' | 'in_test' | 'all_completed' | 'discharged';
   assignedSmartRoute: string[];
   registrationTime: string;
+  registeredAtMs?: number;
   opdTokenNumber: string;
   doctorReviewStatus: DoctorReviewStatus;
   notes?: string;
@@ -236,7 +242,8 @@ export interface Hospital {
   dataStatus?: string;
 }
 
-export type UserRole = 'doctor' | 'patient' | 'lab_tech';
+export type UserRole = 'doctor' | 'patient' | 'lab_tech' | 'pharmacist';
+export type DoctorPortalView = 'dashboard' | 'walkin' | 'queue' | 'reports' | 'records';
 
 export interface CurrentUser {
   id: string;
@@ -250,3 +257,89 @@ export interface CurrentUser {
 }
 
 export type Language = 'en' | 'hi';
+
+// ==========================================
+// Prescription & Pharmacy Domain Types
+// ==========================================
+
+export interface MedicationItem {
+  id: string;
+  drugName: string;
+  genericName?: string;
+  dose: string;
+  frequency: string;
+  duration: string;
+  route: string;
+  instructions?: string;
+  quantity?: string;
+  dispensed?: boolean;
+}
+
+export interface Prescription {
+  id: string;
+  patientId: string;
+  patientName: string;
+  patientUhid: string;
+  doctorId: string;
+  doctorName: string;
+  hospitalCode: string;
+  issuedAt: string;
+  validUntil?: string;
+  medications: MedicationItem[];
+  clinicalNotes?: string;
+  diagnosis?: string;
+  followUpDate?: string;
+  status: 'active' | 'partially_dispensed' | 'fully_dispensed' | 'expired';
+  dispensedAt?: string;
+  dispensedBy?: string;
+  dispensedPharmacy?: string;
+}
+
+export interface PharmacyDispenseRecord {
+  id: string;
+  prescriptionId: string;
+  patientId: string;
+  patientName: string;
+  patientUhid: string;
+  pharmacistName: string;
+  dispensedAt: string;
+  medicationsDispensed: string[];
+  notes?: string;
+}
+
+export interface Appointment {
+  id: string;
+  patientId: string;
+  patientName: string;
+  doctorId: string;
+  doctorName: string;
+  hospitalCode: string;
+  scheduledDate: string;
+  scheduledTime: string;
+  type: 'consultation' | 'follow_up' | 'emergency';
+  status: 'booked' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
+  chiefComplaint?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface MedicineCatalogItem {
+  id: string;
+  brandName: string;
+  genericName: string;
+  category: string;
+  commonDosages: string[];
+  commonFrequencies: string[];
+  commonRoutes: string[];
+  commonDurations: string[];
+}
+
+export interface MedicalHistoryEntry {
+  id: string;
+  patientId: string;
+  date: string;
+  type: 'visit' | 'prescription' | 'lab_report' | 'appointment';
+  title: string;
+  summary: string;
+  linkedId?: string;
+}

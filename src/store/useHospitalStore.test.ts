@@ -9,12 +9,15 @@ import {
   markTestAlreadyDoneAction,
   skipTokenAction,
   verifyAndDischargePatientAction,
+  verifyLabReportAction,
   resetToCleanSlateAction,
   loadDemoScenarioAction,
+  loadDoctorDemoPatientsAction,
   loginAsPatientWithSessionAction,
   searchPreRegisteredPatientsAction,
   selectAndLoginPatientAction,
   loginDoctorAction,
+  setDoctorViewAction,
   loginLabTechAction,
   loginPatientLookupAction,
   setHospitalByCodeAction,
@@ -502,6 +505,65 @@ describe('Hospital State Machine & End-to-End Workflow', () => {
 
       state = getHospitalState();
       expect(state.currentUser).toBeNull();
+    });
+  });
+
+  describe('Doctor Reports Verification & Live Lab Telemetry Sync', () => {
+    beforeEach(() => {
+      resetToCleanSlateAction();
+    });
+
+    it('verifies individual lab reports with doctor notes without prematurely discharging patient', () => {
+      const p = registerPatientAction({
+        name: 'Kavita Mehta',
+        age: 39,
+        gender: 'Female',
+        contact: '9811445566',
+        chiefComplaint: 'Chest discomfort and fatigue'
+      });
+      expect(p.registeredAtMs).toBeGreaterThan(0);
+
+      prescribeTestsAction(p.id, ['test-cbc', 'test-xray-chest'], 'normal');
+      const s1 = getHospitalState();
+      const cbcTok = s1.patients[0].activeTokenIds['test-cbc'];
+
+      completeTestAndUploadReportAction(cbcTok, { 'Hemoglobin (Hb)': '11.2' }, 'Mild pallor');
+      const s2 = getHospitalState();
+      expect(s2.clinicalReports).toHaveLength(1);
+      const rep = s2.clinicalReports[0];
+      expect(rep.status).toBe('uploaded');
+      expect(rep.createdAtMs).toBeGreaterThan(0);
+      expect(rep.actualTurnaroundMinutes).toBeGreaterThan(0);
+
+      verifyLabReportAction(rep.id, 'Start oral iron supplementation after reviewing X-Ray');
+      const s3 = getHospitalState();
+      const verifiedRep = s3.clinicalReports.find(r => r.id === rep.id)!;
+      expect(verifiedRep.status).toBe('verified_by_doctor');
+      expect(verifiedRep.doctorNotes).toContain('oral iron');
+      expect(verifiedRep.doctorSignature).toBeTruthy();
+
+      // Patient still has Chest X-Ray pending so not discharged yet
+      const patAfter = s3.patients.find(x => x.id === p.id)!;
+      expect(patAfter.status).not.toBe('discharged');
+    });
+
+    it('loads doctor demo queue with staggered timestamps and reports ordered newest-first', () => {
+      loadDoctorDemoPatientsAction();
+      const s = getHospitalState();
+      expect(s.patients).toHaveLength(4);
+      expect(s.clinicalReports).toHaveLength(2);
+      expect((s.clinicalReports[0].createdAtMs ?? 0)).toBeGreaterThanOrEqual(
+        s.clinicalReports[1].createdAtMs ?? 0
+      );
+    });
+
+    it('defaults doctorView to dashboard on login and supports switching views', () => {
+      loginDoctorAction('Dr. Ananya Sen', 'Max Super Speciality Hospital, Saket', 'Chamber 204', '', '', '1234', 'H001');
+      expect(getHospitalState().doctorView).toBe('dashboard');
+      setDoctorViewAction('walkin');
+      expect(getHospitalState().doctorView).toBe('walkin');
+      loginDoctorAction('Dr. Ananya Sen', 'Max Super Speciality Hospital, Saket', 'Chamber 204', '', '', '1234', 'H001');
+      expect(getHospitalState().doctorView).toBe('dashboard');
     });
   });
 });

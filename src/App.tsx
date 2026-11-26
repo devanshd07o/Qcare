@@ -5,6 +5,7 @@ import { Header } from './components/common/Header';
 import { DoctorPortal } from './components/doctor/DoctorPortal';
 import { PatientPortal } from './components/patient/PatientPortal';
 import { LabPortal } from './components/lab/LabPortal';
+import { PharmacyPortal } from './components/pharmacy/PharmacyPortal';
 import { GlobalTooltip } from './components/common/GlobalTooltip';
 import { Sparkles, X, ShieldCheck } from 'lucide-react';
 
@@ -108,18 +109,25 @@ export default function App() {
       <Header />
 
       {/* Main Dedicated Portal Views */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 pt-16 sm:pt-17 pb-4">
+      <main className={`flex-1 w-full pt-[80px] pb-4 ${activeRole === 'doctor' ? 'px-3 sm:px-4' : 'max-w-7xl mx-auto px-3 sm:px-6'}`}>
         {activeRole === 'doctor' && <DoctorPortal />}
         {activeRole === 'patient' && <PatientPortal />}
         {activeRole === 'lab_tech' && <LabPortal />}
+        {activeRole === 'pharmacist' && currentUser && (
+          <PharmacyPortal
+            pharmacistName={currentUser.name}
+            pharmacyName='QCare Pharmacy'
+            onBack={() => window.history.back()}
+          />
+        )}
       </main>
 
       {/* Universal Liquid Glass Tooltip Engine */}
       <GlobalTooltip />
 
       {/* Clean Hospital Footer */}
-      <footer className="border-t border-slate-200/80 bg-white/70 backdrop-blur-md py-3 text-xs text-slate-500 print:hidden mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-2">
+      <footer className={`border-t border-slate-200/80 bg-white/70 backdrop-blur-md py-3 text-xs text-slate-500 print:hidden mt-auto ${activeRole === 'doctor' ? 'md:pl-[76px]' : ''}`}>
+        <div className={`${activeRole === 'doctor' ? 'w-full px-3 sm:px-4' : 'max-w-7xl mx-auto px-4 sm:px-6'} flex items-center justify-between gap-2`}>
           <div className="flex items-center gap-2">
             <span className="font-semibold text-slate-700">Qcare</span>
             <span className="text-slate-300">·</span>
@@ -137,3 +145,4 @@ export default function App() {
     </div>
   );
 }
+

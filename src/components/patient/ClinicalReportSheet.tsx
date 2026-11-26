@@ -166,7 +166,7 @@ Digital Sign: ${r.doctorSignature || 'Awaiting Consulting Medical Officer'}
                 <span className="text-[10px] text-slate-400 block uppercase font-semibold">Report Status</span>
                 <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
                   report.status === 'verified_by_doctor'
-                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    ? 'bg-slate-100 text-slate-800 border border-slate-200'
                     : 'bg-blue-50 text-blue-700 border border-blue-200'
                 }`}>
                   <ShieldCheck className="w-3.5 h-3.5" />
@@ -291,7 +291,7 @@ Digital Sign: ${r.doctorSignature || 'Awaiting Consulting Medical Officer'}
                           </div>
                           <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                             isNormal
-                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                              ? 'bg-slate-100 text-slate-700 border border-slate-200'
                               : isCrit
                               ? 'bg-rose-50 text-rose-800 border border-rose-200'
                               : 'bg-amber-50 text-amber-800 border border-amber-200'

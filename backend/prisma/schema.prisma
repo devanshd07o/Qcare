@@ -1,0 +1,361 @@
+// QCare SaaS — Prisma Schema
+// Supports SQLite (dev) and PostgreSQL (prod) via DATABASE_URL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// HOSPITAL / TENANT
+// ─────────────────────────────────────────────
+model Hospital {
+  id            String   @id @default(cuid())
+  name          String
+  code          String   @unique // e.g. "AIIMS", "APOLLO"
+  shortName     String
+  tagline       String   @default("")
+  address       String   @default("")
+  city          String   @default("")
+  contactNumber String   @default("")
+  helpdeskPhone String   @default("")
+  opdTimings    String   @default("Mon–Sat, 08:30 AM – 02:00 PM")
+  website       String   @default("")
+  logoUrl       String   @default("")
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  users           User[]
+  patients        Patient[]
+  prescriptions   Prescription[]
+  appointments    Appointment[]
+  queueTokens     QueueToken[]
+  labReports      LabReport[]
+  departments     Department[]
+  counters        Counter[]
+  dispenseRecords PharmacyDispenseRecord[]
+}
+
+// ─────────────────────────────────────────────
+// USER (Staff + Patients)
+// ─────────────────────────────────────────────
+model User {
+  id         String   @id @default(cuid())
+  hospitalId String
+  hospital   Hospital @relation(fields: [hospitalId], references: [id])
+
+  role         String // doctor | lab_tech | pharmacist | admin
+  name         String
+  email        String   @unique
+  passwordHash String
+  identifier   String // employee ID or license number
+  speciality   String   @default("")
+  gender       String   @default("")
+  avatar       String   @default("")
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  refreshTokens   RefreshToken[]
+  prescriptions   Prescription[]
+  doctorAppts     Appointment[]            @relation("DoctorAppointments")
+  labReports      LabReport[]
+  dispenseRecords PharmacyDispenseRecord[]
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────
+// PATIENT
+// ─────────────────────────────────────────────
+model Patient {
+  id          String   @id @default(cuid())
+  uhid        String   @unique // e.g. "QC-2026-9411"
+  qrSessionId String   @unique // short code encoded in QR, e.g. "QC-9411"
+  hospitalId  String
+  hospital    Hospital @relation(fields: [hospitalId], references: [id])
+
+  name              String
+  age               Int
+  gender            String // Male | Female | Other
+  contact           String
+  bloodGroup        String @default("")
+  address           String @default("")
+  emergencyContact  String @default("")
+  allergies         String @default("") // comma-separated
+  chronicConditions String @default("")
+  priority          String @default("standard") // emergency | senior | standard
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  prescriptions   Prescription[]
+  appointments    Appointment[]
+  labReports      LabReport[]
+  queueTokens     QueueToken[]
+  dispenseRecords PharmacyDispenseRecord[]
+  medicalHistory  MedicalHistoryEntry[]
+  familyMembers   FamilyMember[]
+  familyOf        FamilyMember[]           @relation("PrimaryPatient")
+}
+
+model FamilyMember {
+  id               String   @id @default(cuid())
+  primaryPatientId String
+  primaryPatient   Patient  @relation("PrimaryPatient", fields: [primaryPatientId], references: [id], onDelete: Cascade)
+  linkedPatientId  String
+  linkedPatient    Patient  @relation(fields: [linkedPatientId], references: [id])
+  relationship     String // spouse | child | parent | sibling | other
+  createdAt        DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────
+// PRESCRIPTION
+// ─────────────────────────────────────────────
+model Prescription {
+  id         String   @id @default(cuid())
+  patientId  String
+  patient    Patient  @relation(fields: [patientId], references: [id])
+  doctorId   String
+  doctor     User     @relation(fields: [doctorId], references: [id])
+  hospitalId String
+  hospital   Hospital @relation(fields: [hospitalId], references: [id])
+
+  diagnosis         String    @default("")
+  clinicalNotes     String    @default("")
+  followUpDate      String    @default("")
+  status            String    @default("active") // active | partially_dispensed | fully_dispensed | expired
+  issuedAt          DateTime  @default(now())
+  validUntil        DateTime
+  dispensedAt       DateTime?
+  dispensedBy       String    @default("")
+  dispensedPharmacy String    @default("")
+
+  medications           PrescriptionMedication[]
+  dispenseRecords       PharmacyDispenseRecord[]
+  medicalHistoryEntries MedicalHistoryEntry[]
+}
+
+model PrescriptionMedication {
+  id             String       @id @default(cuid())
+  prescriptionId String
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  drugName     String
+  genericName  String    @default("")
+  dose         String
+  frequency    String
+  duration     String
+  route        String
+  instructions String    @default("")
+  quantity     String    @default("")
+  dispensed    Boolean   @default(false)
+  dispensedAt  DateTime?
+
+  @@index([prescriptionId])
+}
+
+// ─────────────────────────────────────────────
+// PHARMACY DISPENSE
+// ─────────────────────────────────────────────
+model PharmacyDispenseRecord {
+  id             String       @id @default(cuid())
+  prescriptionId String
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id])
+  patientId      String
+  patient        Patient      @relation(fields: [patientId], references: [id])
+  pharmacistId   String
+  pharmacist     User         @relation(fields: [pharmacistId], references: [id])
+  hospitalId     String
+  hospital       Hospital     @relation(fields: [hospitalId], references: [id])
+
+  pharmacyName String
+  notes        String   @default("")
+  dispensedAt  DateTime @default(now())
+
+  @@index([patientId])
+  @@index([prescriptionId])
+}
+
+// ─────────────────────────────────────────────
+// APPOINTMENT
+// ─────────────────────────────────────────────
+model Appointment {
+  id         String   @id @default(cuid())
+  patientId  String
+  patient    Patient  @relation(fields: [patientId], references: [id])
+  doctorId   String
+  doctor     User     @relation("DoctorAppointments", fields: [doctorId], references: [id])
+  hospitalId String
+  hospital   Hospital @relation(fields: [hospitalId], references: [id])
+
+  scheduledDate  String // ISO date string "2026-10-25"
+  scheduledTime  String // "10:30 AM"
+  type           String   @default("consultation") // consultation | follow_up | emergency
+  status         String   @default("booked") // booked | confirmed | in_progress | completed | cancelled
+  chiefComplaint String   @default("")
+  notes          String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  medicalHistoryEntries MedicalHistoryEntry[]
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([scheduledDate])
+}
+
+// ─────────────────────────────────────────────
+// LAB REPORT
+// ─────────────────────────────────────────────
+model LabReport {
+  id           String   @id @default(cuid())
+  patientId    String
+  patient      Patient  @relation(fields: [patientId], references: [id])
+  technicianId String?
+  technician   User?    @relation(fields: [technicianId], references: [id])
+  hospitalId   String
+  hospital     Hospital @relation(fields: [hospitalId], references: [id])
+
+  testId         String
+  testName       String
+  technicalName  String @default("")
+  departmentId   String
+  counterId      String @default("")
+  roomNo         String @default("")
+  technicianName String @default("")
+
+  status          String  @default("pending") // pending | uploaded | verified_by_doctor
+  summary         String  @default("")
+  isCritical      Boolean @default(false)
+  doctorNotes     String  @default("")
+  doctorSignature String  @default("")
+
+  metrics   LabReportMetric[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  medicalHistoryEntries MedicalHistoryEntry[]
+
+  @@index([patientId])
+}
+
+model LabReportMetric {
+  id       String    @id @default(cuid())
+  reportId String
+  report   LabReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  label       String
+  value       String
+  unit        String
+  normalRange String
+  flag        String @default("normal") // normal | high | low | critical
+
+  @@index([reportId])
+}
+
+// ─────────────────────────────────────────────
+// QUEUE TOKEN
+// ─────────────────────────────────────────────
+model QueueToken {
+  id          String   @id @default(cuid())
+  tokenNumber String // e.g. "B-11"
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id])
+  hospitalId  String
+  hospital    Hospital @relation(fields: [hospitalId], references: [id])
+
+  testId         String
+  testName       String @default("")
+  departmentId   String
+  counterId      String @default("")
+  roomNo         String @default("")
+  priority       String @default("standard")
+  doctorPriority String @default("normal")
+  status         String @default("waiting") // waiting | called | in_progress | completed | skipped | on_hold
+
+  queuePosition        Int
+  estimatedWaitMinutes Int       @default(0)
+  issuedAt             DateTime  @default(now())
+  calledAt             DateTime?
+  completedAt          DateTime?
+
+  @@index([patientId])
+  @@index([departmentId, status])
+}
+
+// ─────────────────────────────────────────────
+// DEPARTMENT & COUNTER (per hospital config)
+// ─────────────────────────────────────────────
+model Department {
+  id          String   @id @default(cuid())
+  hospitalId  String
+  hospital    Hospital @relation(fields: [hospitalId], references: [id])
+  name        String
+  code        String
+  category    String
+  wing        String   @default("")
+  floor       String   @default("")
+  room        String   @default("")
+  accentColor String   @default("#3b82f6")
+  iconName    String   @default("activity")
+  description String   @default("")
+  isActive    Boolean  @default(true)
+
+  counters Counter[]
+
+  @@unique([hospitalId, code])
+}
+
+model Counter {
+  id           String     @id @default(cuid())
+  hospitalId   String
+  hospital     Hospital   @relation(fields: [hospitalId], references: [id])
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  code                  String
+  name                  String
+  roomNo                String
+  technicianName        String  @default("")
+  status                String  @default("active") // active | paused | closed
+  servedCountToday      Int     @default(0)
+  averageServiceMinutes Int     @default(10)
+  isActive              Boolean @default(true)
+
+  @@unique([hospitalId, code])
+}
+
+// ─────────────────────────────────────────────
+// MEDICAL HISTORY TIMELINE
+// ─────────────────────────────────────────────
+model MedicalHistoryEntry {
+  id                   String        @id @default(cuid())
+  patientId            String
+  patient              Patient       @relation(fields: [patientId], references: [id])
+  date                 DateTime      @default(now())
+  type                 String // visit | prescription | lab_report | appointment
+  title                String
+  summary              String        @default("")
+  linkedPrescriptionId String?
+  prescription         Prescription? @relation(fields: [linkedPrescriptionId], references: [id])
+  linkedReportId       String?
+  labReport            LabReport?    @relation(fields: [linkedReportId], references: [id])
+  linkedApptId         String?
+  appointment          Appointment?  @relation(fields: [linkedApptId], references: [id])
+
+  @@index([patientId, date])
+}

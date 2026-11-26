@@ -1,13 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   FileText, 
   Radio, 
-  Footprints,
-  X,
-  Zap,
-  Printer,
-  Languages,
-  ArrowLeft
+  Footprints, 
+  X, 
+  Printer, 
+  Languages, 
+  ArrowLeft,
+  Compass,
+  Info,
+  ShieldCheck,
+  Navigation,
+  Pill,
+  Activity,
+  QrCode,
+  Droplet,
+  User,
+  Clock,
+  Sparkles
 } from 'lucide-react';
 import { useHospitalStore } from '../../store/useHospitalStore';
 import { ClinicalBoardingPass } from './ClinicalBoardingPass';
@@ -16,11 +26,16 @@ import { ClinicalReportSheet } from './ClinicalReportSheet';
 import { QBieCompanion } from './QBieCompanion';
 import { WhyQCareModal } from '../common/WhyQCareModal';
 import { PrintableSlip } from '../common/PrintableSlip';
+import { PatientPrescriptionView } from './PatientPrescriptionView';
+import { PatientHealthCardModal } from './PatientHealthCardModal';
+import { PatientHistoryTimeline } from './PatientHistoryTimeline';
+import { PrescribedTestsNavigationPanel } from './PrescribedTestsNavigationPanel';
 import { RouteStep } from '../../types';
 
 export const PatientView: React.FC = () => {
   const {
     selectedPatient,
+    currentHospital,
     currentRoutingPlan,
     clinicalReports,
     queueTokens,
@@ -35,11 +50,24 @@ export const PatientView: React.FC = () => {
     navigateBack
   } = useHospitalStore();
 
-  const [activeTab, setActiveTab] = useState<'journey' | 'reports'>('journey');
+  const [activeTab, setActiveTab] = useState<'journey' | 'prescriptions' | 'reports' | 'map' | 'history'>('journey');
   const [showRadarModal, setShowRadarModal] = useState<boolean>(false);
   const [showWhyModal, setShowWhyModal] = useState<boolean>(false);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
+  const [showHealthCard, setShowHealthCard] = useState(false);
   const [selectedManualTestId, setSelectedManualTestId] = useState<string | null>(null);
+  // Live refresh tick — fires every 2 minutes, triggers re-render of queue stats
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<number>(() => Date.now());
+  const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    refreshTimerRef.current = setInterval(() => {
+      setLastRefreshedAt(Date.now());
+    }, 120_000); // 2 minutes
+    return () => {
+      if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
+    };
+  }, []);
 
   if (!selectedPatient) {
     return (
@@ -88,7 +116,7 @@ export const PatientView: React.FC = () => {
     <div className="space-y-6 pb-16 font-sans">
       {/* Live Calling Alert Banner */}
       {callingAlert && (callingAlert.patientName === selectedPatient.name || !callingAlert.patientName) && (
-        <div className="bg-teal-700 text-white p-4 rounded-2xl border border-teal-800 flex items-center justify-between gap-3 shadow-md">
+        <div className="bg-teal-800 text-white p-4 rounded-2xl border border-teal-900 flex items-center justify-between gap-3 shadow-md animate-bounce">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
               <Radio className="w-5 h-5 text-amber-300 animate-pulse" />
@@ -98,134 +126,262 @@ export const PatientView: React.FC = () => {
                 Token Called Now · टोकन बुलाया गया
               </p>
               <p className="font-extrabold text-sm sm:text-base text-white">
-                Please proceed to {callingAlert.roomNo} ({callingAlert.counterName})
+                Please proceed immediately to {callingAlert.roomNo} ({callingAlert.counterName})
               </p>
             </div>
           </div>
           {dismissCallingAlert && (
             <button
               onClick={dismissCallingAlert}
-              className="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition-colors cursor-pointer"
+              className="px-3.5 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition-colors cursor-pointer"
             >
               Dismiss
             </button>
           )}
         </div>
       )}
-      
-      {/* Minimal Clean Header & Navigation (Rule 1 & Mobile-First) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          {canGoBack && (
-            <button
-              type="button"
-              onClick={navigateBack}
-              aria-label={language === 'hi' ? 'पिछला पृष्ठ' : 'Go back'}
-              className="min-h-[42px] sm:min-h-[40px] px-3.5 py-2 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 hover:text-slate-900 text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-2xs shrink-0"
-            >
-              <ArrowLeft className="w-4 h-4 text-slate-500" />
-              <span>{language === 'hi' ? 'वापस' : 'Back'}</span>
-            </button>
-          )}
 
-          <div className="grid grid-cols-2 gap-2 flex-1 sm:w-auto">
-            <button
-              onClick={() => setActiveTab('journey')}
-              className={`min-h-[42px] sm:min-h-[40px] py-2 px-3.5 sm:px-4 rounded-2xl text-xs font-extrabold flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer ${
-                activeTab === 'journey'
-                  ? 'bg-teal-600 text-white shadow-sm'
-                  : 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200/90'
-              }`}
-            >
-              <Footprints className="w-4 h-4 shrink-0" />
-              <span className="truncate">{language === 'hi' ? 'जांच यात्रा' : 'Diagnostic Journey'}</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('reports')}
-              className={`min-h-[42px] sm:min-h-[40px] py-2 px-3.5 sm:px-4 rounded-2xl text-xs font-extrabold flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer ${
-                activeTab === 'reports'
-                  ? 'bg-teal-600 text-white shadow-sm'
-                  : 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200/90'
-              }`}
-            >
-              <FileText className="w-4 h-4 shrink-0" />
-              <span className="truncate">{language === 'hi' ? 'रिपोर्ट्स' : 'Diagnostic Reports'}</span>
-              {patientReports.length > 0 && (
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold tabular-nums ${
-                  activeTab === 'reports' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
-                }`}>
-                  {patientReports.length}
-                </span>
-              )}
-            </button>
+      {/* Top Patient Identity & Digital Health Pass Bar */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-teal-50 border border-teal-200 text-teal-800 flex items-center justify-center font-bold text-base shrink-0 shadow-2xs">
+            <User className="w-5 h-5 text-teal-700" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight truncate">
+                {selectedPatient.name}
+              </h2>
+              <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-lg border border-slate-200">
+                {selectedPatient.uhid}
+              </span>
+              <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                {selectedPatient.age}Y • {selectedPatient.gender}
+              </span>
+              <span className="text-[11px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 flex items-center gap-1">
+                <Droplet className="w-3 h-3 fill-current" />
+                <span>B+</span>
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              Physician: <strong className="text-slate-800">{selectedPatient.prescribedDoctorName}</strong> ({selectedPatient.prescribedDoctorRoom || 'Chamber 204'}) • Token <strong className="text-teal-800">#{selectedPatient.opdTokenNumber || 'OPD-104'}</strong>
+            </p>
           </div>
         </div>
 
-        {/* Language Toggle, Why QCare, Map, Print Slip */}
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap justify-between sm:justify-start">
+        {/* Quick Action Badges */}
+        <div className="flex items-center gap-2 flex-wrap border-t md:border-t-0 pt-3 md:pt-0 border-slate-100">
           <button
             type="button"
-            onClick={() => setLanguage(language === 'en' ? 'hi' : 'en')}
-            className="min-h-[38px] px-3 py-1.5 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs active:scale-95 cursor-pointer"
+            onClick={() => setShowHealthCard(true)}
+            className="px-3.5 py-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
           >
-            <Languages className="w-3.5 h-3.5 text-teal-600" />
-            <span>{language === 'en' ? 'हिंदी' : 'English'}</span>
+            <QrCode className="w-3.5 h-3.5" />
+            <span>Digital Health Card</span>
           </button>
 
           <button
             type="button"
             onClick={() => setIsReceiptOpen(true)}
-            className="min-h-[38px] px-3 py-1.5 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs active:scale-95 cursor-pointer"
+            className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
           >
-            <Printer className="w-3.5 h-3.5 text-slate-600" />
-            <span>{language === 'hi' ? 'पर्ची QR' : 'QR Slip'}</span>
+            <Printer className="w-3.5 h-3.5 text-slate-500" />
+            <span>{language === 'hi' ? 'पर्ची' : 'QR Slip'}</span>
           </button>
 
           <button
+            type="button"
+            onClick={() => setLanguage(language === 'en' ? 'hi' : 'en')}
+            className="px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <Languages className="w-3.5 h-3.5 text-teal-700" />
+            <span>{language === 'en' ? 'हिंदी' : 'English'}</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setShowWhyModal(true)}
-            className="min-h-[38px] px-3 py-1.5 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200 text-teal-800 text-xs font-extrabold flex items-center gap-1.5 transition-all shadow-2xs active:scale-95 cursor-pointer"
+            className="px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
           >
-            <Zap className="w-3.5 h-3.5 text-teal-600" />
-            <span>Why QCare?</span>
-          </button>
-
-          <button
-            onClick={() => setShowRadarModal(true)}
-            className="min-h-[38px] px-3 py-1.5 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs active:scale-95 cursor-pointer"
-          >
-            <Radio className="w-3.5 h-3.5 text-teal-600" />
-            <span>{language === 'hi' ? 'नक्शा' : 'Map'}</span>
+            <ShieldCheck className="w-3.5 h-3.5 text-teal-700" />
+            <span>Why QCare</span>
           </button>
         </div>
       </div>
+      
+      {/* 5 Executive Tabs for Complete Hospital Journey */}
+      <div className="flex items-center gap-2 border-b border-slate-200/80 pb-2 overflow-x-auto">
+        {canGoBack && (
+          <button
+            type="button"
+            onClick={navigateBack}
+            className="min-h-[40px] px-3.5 py-2 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shrink-0"
+          >
+            <ArrowLeft className="w-4 h-4 text-slate-500" />
+            <span>{language === 'hi' ? 'वापस' : 'Back'}</span>
+          </button>
+        )}
 
-      {/* Main Tab Content */}
-      {activeTab === 'journey' ? (
-        <ClinicalBoardingPass
+        <button
+          onClick={() => setActiveTab('journey')}
+          className={`min-h-[40px] py-2 px-3.5 sm:px-4 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'journey'
+              ? 'bg-teal-700 text-white shadow-xs'
+              : 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200'
+          }`}
+        >
+          <Footprints className="w-4 h-4 shrink-0" />
+          <span>{language === 'hi' ? 'कतार एवं यात्रा' : 'Queue & Journey'}</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('prescriptions')}
+          className={`min-h-[40px] py-2 px-3.5 sm:px-4 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'prescriptions'
+              ? 'bg-teal-700 text-white shadow-xs'
+              : 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200'
+          }`}
+        >
+          <Pill className="w-4 h-4 shrink-0" />
+          <span>{language === 'hi' ? 'प्रिस्क्रिप्शन व दवा' : 'Prescriptions & Rx'}</span>
+          <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold bg-slate-100 text-slate-700">
+            Active
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('reports')}
+          className={`min-h-[40px] py-2 px-3.5 sm:px-4 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'reports'
+              ? 'bg-teal-700 text-white shadow-xs'
+              : 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200'
+          }`}
+        >
+          <FileText className="w-4 h-4 shrink-0" />
+          <span>{language === 'hi' ? 'लैब रिपोर्ट्स' : 'Diagnostic Reports'}</span>
+          {patientReports.length > 0 && (
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold tabular-nums ${
+              activeTab === 'reports' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+            }`}>
+              {patientReports.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('map')}
+          className={`min-h-[40px] py-2 px-3.5 sm:px-4 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'map'
+              ? 'bg-teal-700 text-white shadow-xs'
+              : 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200'
+          }`}
+        >
+          <Compass className="w-4 h-4 shrink-0" />
+          <span>{language === 'hi' ? 'अस्पताल नक्शा' : 'Indoor Floor Map'}</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('history')}
+          className={`min-h-[40px] py-2 px-3.5 sm:px-4 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'history'
+              ? 'bg-teal-700 text-white shadow-xs'
+              : 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200'
+          }`}
+        >
+          <Activity className="w-4 h-4 shrink-0" />
+          <span>{language === 'hi' ? 'इतिहास व वाइटल्स' : 'Vitals & History'}</span>
+        </button>
+      </div>
+
+      {/* TAB 1: Live Journey & Boarding Pass + Inline Floor Map Outside! */}
+      {activeTab === 'journey' && (
+        <div className="space-y-8">
+          {/* Live "Where To Go" Navigation Panel — refreshes every 2 mins, reshuffles on test completion */}
+          {selectedPatient.prescribedTests.length > 0 && (
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-5">
+              <PrescribedTestsNavigationPanel
+                patient={selectedPatient}
+                tests={tests}
+                departments={departments}
+                counters={counters}
+                queueTokens={queueTokens}
+                routeSteps={currentRoutingPlan.smartRouteSteps}
+                lastRefreshedAt={lastRefreshedAt}
+                language={language}
+                onViewReports={() => setActiveTab('reports')}
+              />
+            </div>
+          )}
+
+          <ClinicalBoardingPass
+            patient={selectedPatient}
+            routingPlan={currentRoutingPlan}
+            upNextStep={upNextStep}
+            upNextToken={upNextToken}
+            calledToken={calledToken}
+            inProgressToken={inProgressToken}
+            allCompleted={allCompleted}
+            activeCounter={activeCounter}
+            activeDept={activeDept}
+            waitingAheadCount={waitingAheadCount}
+            bloodLabWaitingCount={bloodLabWaitingCount}
+            language={language}
+            tests={tests}
+            departments={departments}
+            counters={counters}
+            queueTokens={queueTokens}
+            selectedManualTestId={selectedManualTestId}
+            onSelectManualTest={setSelectedManualTestId}
+            onViewReports={() => setActiveTab('reports')}
+            onOpenRadar={() => {
+              const el = document.getElementById('indoor-floor-map');
+              if (el) el.scrollIntoView({ behavior: 'smooth' });
+              else setShowRadarModal(true);
+            }}
+            onPrintSlip={() => setIsReceiptOpen(true)}
+            hideProfileStrip
+          />
+
+          {/* Hospital Floor Blueprint & Live Radar - RENDERED OUTSIDE ON THE MAIN PAGE */}
+          <div id="indoor-floor-map" className="space-y-3 pt-4">
+            <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-teal-50 border border-teal-200 text-teal-800 flex items-center justify-center font-bold shadow-2xs">
+                  <Compass className="w-5 h-5 text-teal-700" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 tracking-tight">
+                    {language === 'hi' ? 'अस्पताल फ्लोर मैप व लाइव नेविगेशन' : 'Hospital Indoor Navigation & Blueprint'}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {language === 'hi' ? 'अपनी मंजिल व सभी जांच कमरों का लाइव ब्लूप्रिंट देखें' : 'Architectural floor plan with active room queues, walking routes, and live wayfinding.'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRadarModal(true)}
+                className="text-xs font-bold text-teal-800 hover:text-teal-950 bg-white hover:bg-slate-50 px-3.5 py-1.5 rounded-xl border border-slate-200 transition-colors shadow-2xs cursor-pointer flex items-center gap-1.5"
+              >
+                <span>Full Screen</span>
+                <span className="text-slate-400">↗</span>
+              </button>
+            </div>
+            <HospitalFloorRadar />
+          </div>
+        </div>
+      )}
+
+      {/* TAB 2: Digital Prescriptions & Medications View */}
+      {activeTab === 'prescriptions' && (
+        <PatientPrescriptionView 
           patient={selectedPatient}
-          routingPlan={currentRoutingPlan}
-          upNextStep={upNextStep}
-          upNextToken={upNextToken}
-          calledToken={calledToken}
-          inProgressToken={inProgressToken}
-          allCompleted={allCompleted}
-          activeCounter={activeCounter}
-          activeDept={activeDept}
-          waitingAheadCount={waitingAheadCount}
-          bloodLabWaitingCount={bloodLabWaitingCount}
-          language={language}
-          tests={tests}
-          departments={departments}
-          counters={counters}
-          queueTokens={queueTokens}
-          selectedManualTestId={selectedManualTestId}
-          onSelectManualTest={setSelectedManualTestId}
-          onViewReports={() => setActiveTab('reports')}
-          onOpenRadar={() => setShowRadarModal(true)}
-          onPrintSlip={() => setIsReceiptOpen(true)}
+          onShowHealthCard={() => setShowHealthCard(true)}
         />
-      ) : (
+      )}
+
+      {/* TAB 3: Diagnostic Lab Reports (PHR) */}
+      {activeTab === 'reports' && (
         <ClinicalReportSheet
           reports={patientReports}
           patientUhid={selectedPatient.uhid}
@@ -234,7 +390,36 @@ export const PatientView: React.FC = () => {
         />
       )}
 
-      {/* Interactive Q-Bie AI Mascot Companion (Draggable with bounds protection & smart positioning) */}
+      {/* TAB 4: Dedicated Full Map Tab */}
+      {activeTab === 'map' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setActiveTab('journey')}
+              className="px-3.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Back to Journey</span>
+            </button>
+            <span className="text-xs text-slate-500 font-medium">
+              Live updates every 30s • Floor Navigation
+            </span>
+          </div>
+          <HospitalFloorRadar />
+        </div>
+      )}
+
+      {/* TAB 5: Vitals & History Timeline */}
+      {activeTab === 'history' && (
+        <PatientHistoryTimeline
+          patient={selectedPatient}
+          reports={patientReports}
+          onViewReports={() => setActiveTab('reports')}
+          onViewPrescriptions={() => setActiveTab('prescriptions')}
+        />
+      )}
+
+      {/* Interactive Q-Bie AI Companion Mascot */}
       <QBieCompanion
         patient={selectedPatient}
         routingPlan={currentRoutingPlan}
@@ -245,6 +430,15 @@ export const PatientView: React.FC = () => {
         reports={patientReports}
         language={language}
       />
+
+      {/* Digital Health Pass Modal */}
+      {showHealthCard && (
+        <PatientHealthCardModal
+          patient={selectedPatient}
+          hospital={currentHospital}
+          onClose={() => setShowHealthCard(false)}
+        />
+      )}
 
       {/* Thermal Receipt Modal */}
       {isReceiptOpen && (
@@ -262,20 +456,20 @@ export const PatientView: React.FC = () => {
         onClose={() => setShowWhyModal(false)}
       />
 
-      {/* Radar Map Modal */}
+      {/* Radar Map Fullscreen Modal */}
       {showRadarModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-scaleUp">
             <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2">
-                <Radio className="w-5 h-5 text-blue-600" />
+                <Compass className="w-5 h-5 text-teal-700" />
                 <h3 className="font-bold text-sm sm:text-base text-slate-900">
                   {language === 'hi' ? 'अस्पताल फ्लोर नेविगेशन नक्शा' : 'Hospital Floor Navigation Map'}
                 </h3>
               </div>
               <button
                 onClick={() => setShowRadarModal(false)}
-                className="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center transition-colors"
+                className="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>

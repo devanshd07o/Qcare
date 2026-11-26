@@ -1158,13 +1158,15 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
 
                   <div className="flex items-center gap-2">
                     {/* Main Premium Custom Dropdown Trigger */}
-                    <div className="flex-1 min-w-0">
+                    <div className="relative flex-1 min-w-0">
                       <button
                         type="button"
                         onClick={() => setIsHospitalMenuOpen(prev => !prev)}
                         aria-expanded={isHospitalMenuOpen}
                         aria-label="Select hospital"
-                        className={`w-full h-11 px-3 bg-white border rounded-xl flex items-center justify-between transition-all cursor-pointer shadow-xs text-left ${
+                        className={`w-full h-11 pl-3 bg-white border rounded-xl flex items-center justify-between transition-[border-color,background-color,box-shadow] duration-150 cursor-pointer shadow-xs text-left ${
+                          selectedHospital ? 'pr-14' : 'pr-9'
+                        } ${
                           !selectedHospital && error
                             ? 'border-amber-400 bg-amber-50/20 ring-2 ring-amber-400/20'
                             : selectedHospital
@@ -1193,28 +1195,29 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
                             </span>
                           )}
                         </div>
-
-                        <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                          {selectedHospital && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleClearHospital();
-                              }}
-                              title="Clear hospital selection"
-                              className="w-5 h-5 rounded-full hover:bg-slate-200/70 text-slate-400 hover:text-slate-700 flex items-center justify-center transition-colors cursor-pointer"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          )}
-                          <ChevronDown
-                            className={`w-4 h-4 text-slate-400 transition-transform ${
-                              isHospitalMenuOpen ? 'rotate-180 text-teal-700' : ''
-                            }`}
-                          />
-                        </div>
                       </button>
+
+                      <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                        {selectedHospital && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleClearHospital();
+                            }}
+                            title="Clear hospital selection"
+                            aria-label="Clear hospital selection"
+                            className="pointer-events-auto w-5 h-5 rounded-full hover:bg-slate-200/70 text-slate-400 hover:text-slate-700 flex items-center justify-center transition-colors cursor-pointer"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                        <ChevronDown
+                          className={`w-4 h-4 text-slate-400 transition-transform ${
+                            isHospitalMenuOpen ? 'rotate-180 text-teal-700' : ''
+                          }`}
+                        />
+                      </div>
                     </div>
 
                     {/* Hybrid Quick Code Input (Auto-detects when typing 'MAX-01', 'max 01', etc.) */}

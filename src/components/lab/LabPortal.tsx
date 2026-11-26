@@ -387,7 +387,7 @@ export const LabPortal: React.FC = () => {
                 ({currentDept.location.room})
               </span>
               {waitingTokens.length > 0 && (
-                <span className="text-[10px] font-mono font-bold text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded-md border border-teal-200/60 shrink-0">
+                <span className="text-[10px] font-mono font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded-md border border-slate-200 shrink-0">
                   {waitingTokens.length} waiting
                 </span>
               )}
@@ -467,7 +467,7 @@ export const LabPortal: React.FC = () => {
 
                         <div className="flex items-center gap-2 shrink-0">
                           {deptWaitingCount > 0 && (
-                            <span className="font-mono text-[10px] font-bold text-teal-700 bg-teal-50/80 px-2 py-0.5 rounded-md border border-teal-200/50">
+                            <span className="font-mono text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
                               {deptWaitingCount} waiting
                             </span>
                           )}
@@ -496,7 +496,7 @@ export const LabPortal: React.FC = () => {
               {currentCounter?.technicianName || 'Lab Technician'}
             </span>
             <span className="text-[10px] text-slate-500 font-mono">
-              {currentCounter?.code || 'BAY-1'} · Rm {currentDept.location.room}
+              {currentCounter?.code || 'BAY-1'} · {currentDept.location.room}
             </span>
           </div>
           <button
@@ -535,7 +535,7 @@ export const LabPortal: React.FC = () => {
               </div>
               {currentToken && (
                 <span className="text-[10px] font-mono font-bold text-slate-400">
-                  Rm {currentDept.location.room}
+                  {currentDept.location.room}
                 </span>
               )}
             </div>
@@ -574,7 +574,7 @@ export const LabPortal: React.FC = () => {
 
                   {/* Investigation chip */}
                   <div className="pl-1">
-                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-teal-800 bg-teal-50 border border-teal-200/80 px-3 py-1.5 rounded-xl">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-xl">
                       <FlaskConical className="w-3 h-3 shrink-0" />
                       {currentToken.testName}
                     </span>
@@ -725,7 +725,7 @@ export const LabPortal: React.FC = () => {
                   Patient Queue — {currentDept.name}
                 </h3>
                 <p className="text-[11px] text-slate-500 font-mono">
-                  Room {currentDept.location.room}
+                  {currentDept.location.room} · {currentDept.location.floor}
                 </p>
               </div>
             </div>

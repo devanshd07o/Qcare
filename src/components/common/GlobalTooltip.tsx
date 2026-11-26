@@ -1,3 +1,4 @@
+/* Source: D:\LetsCode\UI_COMPONENTS\originui (MIT) — single unified bright clinical tooltip controller */
 import React, { useState, useEffect, useRef } from 'react';
 
 interface TooltipState {
@@ -6,6 +7,24 @@ interface TooltipState {
   y: number;
   visible: boolean;
   isAbove: boolean;
+}
+
+/**
+ * Strip native `title` attributes into `data-tooltip` proactively so
+ * the browser OS tooltip never fires simultaneously alongside custom tooltips.
+ */
+function stripNativeTitle(el: HTMLElement | null): void {
+  let cursor: HTMLElement | null = el;
+  while (cursor) {
+    if (cursor.hasAttribute('title')) {
+      const titleText = cursor.getAttribute('title')?.trim();
+      if (titleText && !cursor.hasAttribute('data-tooltip') && !cursor.hasAttribute('data-custom-tooltip')) {
+        cursor.setAttribute('data-tooltip', titleText);
+      }
+      cursor.removeAttribute('title');
+    }
+    cursor = cursor.parentElement;
+  }
 }
 
 export const GlobalTooltip: React.FC = () => {
@@ -22,48 +41,58 @@ export const GlobalTooltip: React.FC = () => {
   const currentTargetRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    const handleMouseOver = (e: MouseEvent) => {
-      const target = (e.target as HTMLElement | null)?.closest?.('[data-tooltip], [title]') as HTMLElement | null;
-      if (!target) return;
+    const clearTimers = () => {
+      if (showTimeoutRef.current) {
+        clearTimeout(showTimeoutRef.current);
+        showTimeoutRef.current = null;
+      }
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current);
+        hideTimeoutRef.current = null;
+      }
+    };
 
-      // Convert native title to data-tooltip to suppress ugly OS tooltip
-      if (target.hasAttribute('title') && target.getAttribute('title')) {
-        const titleText = target.getAttribute('title') || '';
-        target.setAttribute('data-tooltip', titleText);
-        target.removeAttribute('title');
+    const handlePointerOver = (e: PointerEvent) => {
+      const rawTarget = e.target as HTMLElement | null;
+      stripNativeTitle(rawTarget);
+
+      // Suppress global tooltip when element is owned by a dedicated rich clinical popover
+      if (rawTarget?.closest?.('[data-custom-tooltip]')) {
+        currentTargetRef.current = null;
+        clearTimers();
+        setTooltip(prev => (prev.visible ? { ...prev, visible: false } : prev));
+        return;
       }
 
-      const text = target.getAttribute('data-tooltip');
-      if (!text || !text.trim()) return;
+      const target = rawTarget?.closest?.('[data-tooltip]') as HTMLElement | null;
+      if (!target) return;
+
+      const text = target.getAttribute('data-tooltip')?.trim();
+      if (!text) return;
 
       if (currentTargetRef.current === target) return;
       currentTargetRef.current = target;
+      clearTimers();
 
-      if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
-      if (showTimeoutRef.current) clearTimeout(showTimeoutRef.current);
-
-      // 180ms gentle hover delay to avoid annoying flashes while moving mouse
       showTimeoutRef.current = setTimeout(() => {
         if (currentTargetRef.current !== target) return;
 
         const rect = target.getBoundingClientRect();
         const x = Math.min(Math.max(16, rect.left + rect.width / 2), window.innerWidth - 16);
-
-        // Auto flip: If element is in bottom 120px of viewport, place tooltip above
-        const isAbove = rect.bottom > window.innerHeight - 100 || rect.top > window.innerHeight - 140;
+        const isAbove = rect.top > 120 && (rect.bottom > window.innerHeight - 100 || rect.top > window.innerHeight - 140);
         const y = isAbove ? Math.max(8, rect.top - 8) : Math.min(window.innerHeight - 30, rect.bottom + 8);
 
         setTooltip({
-          text: text.trim(),
+          text,
           x,
           y,
           isAbove,
           visible: true
         });
-      }, 180);
+      }, 220);
     };
 
-    const handleMouseOut = (e: MouseEvent) => {
+    const handlePointerOut = (e: PointerEvent) => {
       const activeEl = currentTargetRef.current;
       if (!activeEl) return;
 
@@ -72,54 +101,51 @@ export const GlobalTooltip: React.FC = () => {
       }
 
       currentTargetRef.current = null;
-      if (showTimeoutRef.current) clearTimeout(showTimeoutRef.current);
-      if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+      clearTimers();
 
       hideTimeoutRef.current = setTimeout(() => {
-        setTooltip(prev => ({ ...prev, visible: false }));
+        setTooltip(prev => (prev.visible ? { ...prev, visible: false } : prev));
       }, 60);
     };
 
     const handleDismiss = () => {
       currentTargetRef.current = null;
-      if (showTimeoutRef.current) clearTimeout(showTimeoutRef.current);
-      if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
-      setTooltip(prev => ({ ...prev, visible: false }));
+      clearTimers();
+      setTooltip(prev => (prev.visible ? { ...prev, visible: false } : prev));
     };
 
-    document.addEventListener('mouseover', handleMouseOver, { passive: true });
-    document.addEventListener('mouseout', handleMouseOut, { passive: true });
+    document.addEventListener('pointerover', handlePointerOver, { passive: true, capture: true });
+    document.addEventListener('pointerout', handlePointerOut, { passive: true, capture: true });
     document.addEventListener('click', handleDismiss, { passive: true });
     window.addEventListener('scroll', handleDismiss, { passive: true, capture: true });
 
     return () => {
-      document.removeEventListener('mouseover', handleMouseOver);
-      document.removeEventListener('mouseout', handleMouseOut);
+      document.removeEventListener('pointerover', handlePointerOver, { capture: true });
+      document.removeEventListener('pointerout', handlePointerOut, { capture: true });
       document.removeEventListener('click', handleDismiss);
       window.removeEventListener('scroll', handleDismiss, { capture: true });
-      if (showTimeoutRef.current) clearTimeout(showTimeoutRef.current);
-      if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+      clearTimers();
     };
   }, []);
 
   if (!tooltip.visible || !tooltip.text) return null;
 
-  // Safe clamping for left/right viewport boundaries
-  const maxTooltipWidth = 280;
-  const halfWidth = maxTooltipWidth / 2;
-  const safeX = Math.max(halfWidth + 12, Math.min(window.innerWidth - halfWidth - 12, tooltip.x));
-
-  const isLight = true; // High-contrast clinical frosted light glass
+  const estimatedWidth = Math.min(280, Math.max(72, Math.ceil(tooltip.text.length * 7.2 + 28)));
+  const halfWidth = estimatedWidth / 2;
+  const safeX = Math.max(halfWidth + 10, Math.min(window.innerWidth - halfWidth - 10, tooltip.x));
+  const rawArrowOffset = tooltip.x - safeX;
+  const clampedArrowOffset = Math.max(-halfWidth + 14, Math.min(halfWidth - 14, rawArrowOffset));
 
   return (
     <div
       role="tooltip"
-      className={`liquid-glass-tooltip ${tooltip.isAbove ? 'is-above' : 'is-below'} ${isLight ? 'is-light' : 'is-dark'}`}
+      className={`liquid-glass-tooltip ${tooltip.isAbove ? 'is-above' : 'is-below'}`}
       style={{
         position: 'fixed',
         left: safeX,
         top: tooltip.y,
-        transform: tooltip.isAbove ? 'translate(-50%, -100%)' : 'translate(-50%, 0)'
+        transform: tooltip.isAbove ? 'translate(-50%, -100%)' : 'translate(-50%, 0)',
+        ['--tooltip-arrow-offset' as string]: `${clampedArrowOffset}px`
       }}
     >
       {tooltip.text}

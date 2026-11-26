@@ -30,7 +30,7 @@ export const HowQCareWorksGuide: React.FC = () => {
               <h2 className="text-sm sm:text-base font-extrabold text-obsidian-900 tracking-tight truncate">
                 How Q-Care Works for You
               </h2>
-              <span className="text-[10px] font-bold text-teal-800 bg-teal-100/80 border border-teal-200 px-2 py-0.5 rounded-full">
+              <span className="text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
                 Quick Guide
               </span>
             </div>
@@ -113,7 +113,7 @@ export const HowQCareWorksGuide: React.FC = () => {
           <div className="bg-white/90 rounded-2xl p-3.5 border border-blue-100 shadow-2xs flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                <span className="text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
                   Step 4
                 </span>
                 <Stethoscope className="w-4 h-4 text-emerald-600" />
