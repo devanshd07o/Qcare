@@ -12,6 +12,7 @@ export type TokenStatus =
   | 'completed' 
   | 'skipped' 
   | 'on_hold' 
+  | 'cancelled'
   | 'awaiting_lab_reports' 
   | 'reports_ready';
 
@@ -34,6 +35,8 @@ export interface ClinicalMetric {
 
 export interface ClinicalReport {
   id: string;
+  hospitalId?: string;
+  hospitalCode?: string;
   testId: string;
   testName: string;
   technicalName?: string;
@@ -128,6 +131,8 @@ export interface Counter {
 
 export interface QueueToken {
   id: string;
+  hospitalId?: string;
+  hospitalCode?: string;
   tokenNumber: string; // e.g. "B-11", "OPD-14"
   patientId: string;
   patientName?: string;
@@ -154,6 +159,8 @@ export interface QueueToken {
 
 export interface Patient {
   id: string;
+  hospitalId?: string;
+  hospitalCode?: string;
   uhid: string; // e.g. "QC-2026-9411"
   qrSessionId: string; // e.g. "QC-9411"
   name: string;
@@ -230,6 +237,7 @@ export interface Hospital {
   contactNumber: string;
   doctorName: string;
   doctorRoom: string;
+  doctorDesignation?: string;
   doctorAvatar?: string;
   doctorGender?: 'Male' | 'Female';
   helpdeskPhone?: string;
@@ -250,6 +258,7 @@ export interface CurrentUser {
   role: UserRole;
   name: string;
   identifier: string;
+  designation?: string;
   subtitle?: string;
   assignedBayDepartmentId?: string;
   avatar?: string;
@@ -273,6 +282,21 @@ export interface MedicationItem {
   instructions?: string;
   quantity?: string;
   dispensed?: boolean;
+  dispensedAt?: string;
+}
+
+export type IssueMedicationInput = Omit<MedicationItem, 'id'> & { id?: string };
+
+export interface UpdatePatientVisitPayload {
+  name?: string;
+  age?: number | string;
+  gender?: 'Male' | 'Female' | 'Other';
+  contact?: string;
+  chiefComplaint?: string;
+  priority?: 'standard' | 'emergency';
+  testIds: string[];
+  doctorPriority?: DoctorPriority;
+  notes?: string;
 }
 
 export interface Prescription {
@@ -282,6 +306,7 @@ export interface Prescription {
   patientUhid: string;
   doctorId: string;
   doctorName: string;
+  hospitalId?: string;
   hospitalCode: string;
   issuedAt: string;
   validUntil?: string;
@@ -301,7 +326,10 @@ export interface PharmacyDispenseRecord {
   patientId: string;
   patientName: string;
   patientUhid: string;
+  hospitalId?: string;
+  hospitalCode?: string;
   pharmacistName: string;
+  pharmacyName?: string;
   dispensedAt: string;
   medicationsDispensed: string[];
   notes?: string;

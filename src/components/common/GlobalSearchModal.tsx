@@ -102,10 +102,10 @@ export const GlobalSearchModal: React.FC = () => {
                 <Search className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-slate-900 tracking-tight">
+                <h3 className="text-sm font-bold text-slate-900 tracking-tight text-balance leading-snug">
                   Clinical Patient Lookup & Archive
                 </h3>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-slate-500 max-w-prose leading-normal">
                   Search 56 archived OPD visits or generate realistic AI patient data
                 </p>
               </div>
@@ -143,7 +143,7 @@ export const GlobalSearchModal: React.FC = () => {
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="Search by patient name, UHID, phone number, symptoms, or diagnosis..."
-              className="w-full h-11 pl-10 pr-9 bg-white border border-slate-200 rounded-2xl text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-2xs transition-all"
+              className="w-full h-11 pl-10 pr-9 bg-white border border-slate-200 rounded-2xl text-base md:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-2xs transition-[border-color,box-shadow] duration-150"
             />
             {query && (
               <button
@@ -209,14 +209,14 @@ export const GlobalSearchModal: React.FC = () => {
                     <span className="font-bold text-xs sm:text-sm text-slate-900">
                       {item.name}
                     </span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-blue-50 text-blue-700 border border-blue-200 qcare-pill-3d">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] tabular-nums font-semibold bg-blue-50 text-blue-700 border border-blue-200 qcare-pill-3d">
                       {item.uhid}
                     </span>
-                    <span className="text-[11px] text-slate-500 font-medium">
+                    <span className="text-[11px] text-slate-500 font-medium tabular-nums">
                       {item.age}Y · {item.gender}
                     </span>
                     <span className="text-[11px] text-slate-400">·</span>
-                    <span className="text-[11px] text-slate-500 font-mono">
+                    <span className="text-[11px] text-slate-500 tabular-nums">
                       {item.contact}
                     </span>
                   </div>

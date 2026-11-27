@@ -1,19 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import QRCode from 'qrcode';
 import { 
   X, 
   QrCode, 
   Printer, 
-  Share2, 
   Check, 
   ShieldCheck, 
-  HeartPulse, 
-  Building2, 
-  User, 
-  Calendar,
-  Phone,
   Droplet,
-  Copy,
-  AlertCircle
+  Copy
 } from 'lucide-react';
 import { Patient, Hospital } from '../../types';
 
@@ -29,6 +23,21 @@ export const PatientHealthCardModal: React.FC<PatientHealthCardModalProps> = ({
   onClose
 }) => {
   const [copied, setCopied] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState('');
+
+  useEffect(() => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://qcare.app';
+    const url = `${origin}/?session=${encodeURIComponent(patient.qrSessionId || 'QC-9411')}&h=${encodeURIComponent(hospital.code)}`;
+    setQrDataUrl('');
+    QRCode.toDataURL(url, {
+      width: 240,
+      margin: 1,
+      errorCorrectionLevel: 'M',
+      color: { dark: '#0f172a', light: '#ffffff' }
+    })
+      .then(setQrDataUrl)
+      .catch(() => {});
+  }, [patient.qrSessionId, hospital.code]);
 
   const copyUhid = () => {
     navigator.clipboard.writeText(patient.uhid);
@@ -85,16 +94,20 @@ export const PatientHealthCardModal: React.FC<PatientHealthCardModalProps> = ({
                 <span className="text-[10px] font-bold text-teal-300 uppercase tracking-widest block">
                   Patient Name
                 </span>
-                <h3 className="text-xl font-black text-white tracking-tight">
+                <h3 className="text-xl font-black text-white tracking-tight text-balance leading-tight">
                   {patient.name}
                 </h3>
-                <div className="flex items-center gap-2 text-xs text-teal-100/90 pt-0.5">
+                <div className="flex items-center gap-2 text-xs text-teal-100/90 pt-0.5 tabular-nums">
                   <span>{patient.age}Y • {patient.gender}</span>
-                  <span>•</span>
-                  <span className="flex items-center gap-1 font-bold text-amber-300">
-                    <Droplet className="w-3 h-3 fill-current" />
-                    <span>Blood: B+</span>
-                  </span>
+                  {(patient as typeof patient & { bloodGroup?: string }).bloodGroup && (
+                    <>
+                      <span>•</span>
+                      <span className="flex items-center gap-1 font-bold text-amber-300">
+                        <Droplet className="w-3 h-3 fill-current" />
+                        <span>Blood: {(patient as typeof patient & { bloodGroup?: string }).bloodGroup}</span>
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -106,11 +119,20 @@ export const PatientHealthCardModal: React.FC<PatientHealthCardModalProps> = ({
 
             {/* Dynamic QR Display */}
             <div className="bg-white rounded-2xl p-4 flex flex-col items-center justify-center shadow-lg text-slate-900 space-y-2">
-              <div className="w-36 h-36 border-2 border-dashed border-teal-700/60 rounded-xl flex items-center justify-center p-1.5 relative">
-                <QrCode className="w-32 h-32 text-slate-900" />
+              <div className="w-36 h-36 border-2 border-dashed border-teal-700/60 rounded-xl flex items-center justify-center p-1.5 relative bg-white">
+                {qrDataUrl ? (
+                  <img
+                    src={qrDataUrl}
+                    alt={`QR Pass ${patient.qrSessionId}`}
+                    className="w-32 h-32 object-contain"
+                    draggable={false}
+                  />
+                ) : (
+                  <QrCode className="w-32 h-32 text-slate-900" />
+                )}
               </div>
               <div className="text-center">
-                <div className="font-mono font-black text-sm text-slate-900 tracking-wider">
+                <div className="tabular-nums font-black text-sm text-slate-900 tracking-wider">
                   {patient.qrSessionId || 'QC-DEMO'}
                 </div>
                 <div className="text-[10px] text-slate-500 font-semibold">
@@ -123,11 +145,11 @@ export const PatientHealthCardModal: React.FC<PatientHealthCardModalProps> = ({
             <div className="flex items-center justify-between text-xs pt-1 border-t border-white/10">
               <div>
                 <span className="text-[9px] uppercase tracking-wider text-teal-300 block font-bold">UHID Number</span>
-                <span className="font-mono font-bold text-white text-xs">{patient.uhid}</span>
+                <span className="tabular-nums font-bold text-white text-xs">{patient.uhid}</span>
               </div>
               <div className="text-right">
                 <span className="text-[9px] uppercase tracking-wider text-teal-300 block font-bold">Registration</span>
-                <span className="font-bold text-white text-xs">{patient.registrationTime || 'Today'}</span>
+                <span className="tabular-nums font-bold text-white text-xs">{patient.registrationTime || 'Today'}</span>
               </div>
             </div>
           </div>
@@ -153,7 +175,7 @@ export const PatientHealthCardModal: React.FC<PatientHealthCardModalProps> = ({
             </button>
           </div>
 
-          <p className="text-[11px] text-slate-400 text-center leading-relaxed">
+          <p className="text-[11px] text-slate-400 text-center leading-relaxed max-w-prose mx-auto">
             This digital health pass is linked to your medical profile. Pharmacists and diagnostic centers scan this code for instant authorization without paper forms.
           </p>
         </div>

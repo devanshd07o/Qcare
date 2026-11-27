@@ -239,7 +239,7 @@ export const PrescribedTestsNavigationPanel: React.FC<
                     {test.name}
                   </span>
                   {stats.myTokenNumber && !isDone && (
-                    <span className="text-[10px] font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200 tabular-nums">
+                    <span className="text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200 tabular-nums">
                       #{stats.myTokenNumber}
                     </span>
                   )}

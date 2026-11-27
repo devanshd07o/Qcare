@@ -1,6 +1,7 @@
-/* Source: D:\LetsCode\UI_COMPONENTS\originui & kokonutui (MIT) — adapted to QCare full-bleed frosted header */
+/* Source: D:\LetsCode\UI_COMPONENTS\originui & kokonutui (MIT) — adapted to QCare logo brand chrome */
 import React from 'react';
 import { useHospitalStore, resolveIndianDoctorAvatar } from '../../store/useHospitalStore';
+import { REGISTERED_HOSPITALS } from '../../data/mockHospitalData';
 import {
   Stethoscope,
   FlaskConical,
@@ -17,26 +18,51 @@ const ROLE_ICON = {
   patient: User
 } as const;
 
+const DoctorFallbackSvg: React.FC = () => (
+  <svg viewBox="0 0 40 40" fill="none" className="w-full h-full" aria-hidden="true">
+    <rect width="40" height="40" rx="8" fill="#F1F5F9" />
+    <circle cx="20" cy="14.5" r="5.5" fill="#FFFFFF" stroke="#102A43" strokeWidth="1.6" />
+    <path
+      d="M10 33.5C10.8 27 15 23.5 20 23.5C25 23.5 29.2 27 30 33.5"
+      fill="#FFFFFF"
+      stroke="#102A43"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    />
+    <path d="M16 24.5L20 30L24 24.5" stroke="#087C80" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 export const Header: React.FC = () => {
   const {
     currentHospital,
     currentUser,
     activeRole,
-    doctorView,
     navigationHistory,
     signOut,
     navigateBack
   } = useHospitalStore();
 
+  const [avatarFailed, setAvatarFailed] = React.useState(false);
   const doctorAvatar =
     currentUser?.avatar ||
     resolveIndianDoctorAvatar(currentUser?.name || currentHospital.doctorName);
 
+  React.useEffect(() => {
+    setAvatarFailed(false);
+  }, [doctorAvatar]);
+
   const RoleIcon = currentUser ? ROLE_ICON[currentUser.role] : User;
   const isDoctorPortal = activeRole === 'doctor';
-  const isDoctorDashboard = isDoctorPortal && doctorView === 'dashboard';
+  const catalogHospital = REGISTERED_HOSPITALS.find(
+    h => h.id === currentHospital.id || h.code === currentHospital.code
+  );
+  const doctorDesignation =
+    currentUser?.designation ||
+    currentHospital.doctorDesignation ||
+    catalogHospital?.doctorDesignation ||
+    'Senior Consultant · Internal Medicine';
 
-  // Back button must NEVER log the user out: only allow stepping back to an authenticated in-session view.
   const previousEntry =
     navigationHistory && navigationHistory.length > 0
       ? navigationHistory[navigationHistory.length - 1]
@@ -49,95 +75,94 @@ export const Header: React.FC = () => {
   };
 
   return (
-    <header className="fixed inset-x-0 top-0 z-40 px-3 sm:px-4 pt-2.5 pb-2 pointer-events-none select-none bg-[var(--bg-page)]/60 backdrop-blur-md">
+    <header className="fixed inset-x-0 top-0 z-40 select-none qc-clinical-header">
       <div
-        className={`pointer-events-auto ${
-          isDoctorPortal ? 'w-full' : 'mx-auto max-w-7xl'
-        } grid h-14 grid-cols-[auto_minmax(0,1fr)_auto] sm:grid-cols-[minmax(max-content,1fr)_minmax(0,auto)_minmax(max-content,1fr)] items-center gap-3 rounded-[22px] border border-white/80 ring-1 ring-[var(--border-default)]/80 bg-white/85 px-3 sm:px-4 backdrop-blur-xl shadow-[0_6px_22px_-6px_rgba(15,23,42,0.09),inset_0_1px_0_rgba(255,255,255,0.95)]`}
+        className={`${
+          isDoctorPortal ? 'w-full px-4 sm:px-6' : 'mx-auto max-w-7xl px-4 sm:px-6'
+        } flex h-16 items-center justify-between gap-4`}
       >
-        {/* Left Zone: Optional In-Session Back + Raised Rounded Qcare Brand */}
-        <nav aria-label="Workspace navigation" className="flex items-center gap-2 justify-self-start shrink-0">
+        {/* Left Zone: Back (when navigated) + Clean Qcare Logo + 17px Semibold Inter Hospital Name */}
+        <div className="flex min-w-0 items-center gap-3">
           {canStepBackInSession && (
             <button
               type="button"
               onClick={handleSafeBack}
               aria-label="Back to previous view"
               data-tooltip="Back"
-              className="group flex h-8 items-center gap-1 rounded-xl px-2 text-xs font-medium text-[var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-primary)] cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)]"
+              className="group flex h-8 items-center gap-1 rounded-[8px] px-2 text-xs font-medium text-[#64748B] transition-colors duration-150 hover:bg-[#F5F7FA] hover:text-[#0F172A] cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087C80]"
             >
               <ArrowLeft
-                className="h-3.5 w-3.5 transition-transform duration-150 group-hover:-translate-x-0.5"
-                strokeWidth={2.2}
+                className="h-4 w-4 transition-transform duration-150 group-hover:-translate-x-0.5"
+                strokeWidth={1.75}
               />
               <span className="hidden sm:inline">Back</span>
             </button>
           )}
 
-          <div className="inline-flex h-9 items-center rounded-2xl border border-[var(--border-default)]/90 bg-gradient-to-b from-[var(--bg-surface)] to-[var(--bg-surface-hover)] px-2.5 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.09),0_1px_2px_rgba(15,23,42,0.04),inset_0_1px_0_var(--bg-surface)] shrink-0">
-            <img
-              src="/logo-glossy.png"
-              alt="Qcare"
-              className="h-6 w-auto object-contain"
-              draggable={false}
-            />
-          </div>
-        </nav>
+          <img
+            src="/logo-glossy.png"
+            alt="Qcare"
+            className="h-7 w-auto object-contain shrink-0"
+            draggable={false}
+          />
 
-        {/* Center Zone: Clean Centered Hospital Name */}
-        <div className="min-w-0 px-1 sm:px-3 text-center">
-          <span className="block truncate text-xs sm:text-sm md:text-[15px] font-bold tracking-[-0.015em] text-[var(--text-primary)]">
+          <span aria-hidden="true" className="hidden sm:block h-5 w-px bg-[#E2E8F0] shrink-0" />
+
+          <span className="truncate text-[15px] sm:text-[17px] font-semibold tracking-[-0.015em] text-[#0F172A]">
             {currentHospital.name}
           </span>
         </div>
 
-        {/* Right Zone: Clinician Identity (+ Sign out for dashboard or non-sidebar portals) */}
-        <div className="flex shrink-0 items-center gap-2 sm:gap-2.5 justify-self-end">
-          {currentUser && !isDoctorDashboard && (
-            <div className="flex items-center gap-2 pr-0.5 sm:pr-1">
+        {/* Right Zone: Doctor Profile in Top-Right (no Sign out in Doctor header), Identity + Sign out for Other Portals */}
+        <div className="flex shrink-0 items-center gap-3">
+          {currentUser && (
+            <div className="flex items-center gap-2.5">
               {currentUser.role === 'doctor' ? (
-                <img
-                  src={doctorAvatar}
-                  alt={currentUser.name}
-                  className="h-8 w-8 rounded-full object-cover object-top ring-1 ring-[var(--border-default)] shrink-0"
-                  onError={e => {
-                    const img = e.currentTarget;
-                    if (!img.src.includes('doctor_male_1.jpg')) {
-                      img.src = '/doctors/doctor_male_1.jpg';
-                    }
-                  }}
-                />
+                <div className="h-10 w-10 rounded-[8px] border border-[#E2E8F0] bg-[#F8FAFC] overflow-hidden shrink-0 flex items-center justify-center">
+                  {doctorAvatar && !avatarFailed ? (
+                    <img
+                      src={doctorAvatar}
+                      alt={currentUser.name}
+                      loading="eager"
+                      decoding="sync"
+                      className="h-full w-full object-cover object-top block"
+                      onError={() => setAvatarFailed(true)}
+                    />
+                  ) : (
+                    <DoctorFallbackSvg />
+                  )}
+                </div>
               ) : (
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--accent-subtle)] text-[var(--accent-primary)]">
-                  <RoleIcon className="h-4 w-4" />
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-[#F5F7FA] text-[#0F172A] border border-[#E2E8F0]">
+                  <RoleIcon className="h-4 w-4" strokeWidth={1.75} />
                 </div>
               )}
 
-              <div className="hidden text-left leading-tight md:block">
-                <span className="block max-w-[160px] truncate text-[12.5px] font-semibold leading-[1.2] text-[var(--text-primary)]">
+              <div className="hidden text-left sm:block leading-tight">
+                <span className="block max-w-[190px] truncate text-[14px] font-medium text-[#0F172A]">
                   {currentUser.name}
                 </span>
-                {currentUser.identifier && (
-                  <span className="block max-w-[160px] truncate text-[11px] leading-[1.2] text-[var(--text-secondary)]">
-                    {currentUser.identifier}
-                  </span>
-                )}
+                <span className="block max-w-[210px] truncate text-[12px] font-normal text-[#64748B] tabular-nums">
+                  {isDoctorPortal
+                    ? `${doctorDesignation.split('·')[0].trim()} · ${currentUser.identifier}`
+                    : currentUser.role === 'pharmacist'
+                    ? `${currentUser.subtitle || 'Hospital Dispensary'} · ${currentUser.identifier}`
+                    : currentUser.identifier}
+                </span>
               </div>
             </div>
           )}
 
-          {currentUser && (!isDoctorPortal || isDoctorDashboard) && (
+          {currentUser && !isDoctorPortal && (
             <>
-              {!isDoctorDashboard && (
-                <span aria-hidden="true" className="hidden sm:block h-4 w-px bg-[var(--border-subtle)]" />
-              )}
-
+              <span aria-hidden="true" className="hidden sm:block h-5 w-px bg-[#E2E8F0]" />
               <button
                 type="button"
                 onClick={signOut}
                 data-tooltip="Sign out"
-                className="flex h-8 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium text-[var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--danger-bg)] hover:text-[var(--danger)] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)]"
+                className="flex h-9 items-center gap-1.5 rounded-[8px] border border-[#E2E8F0] bg-white px-3 text-xs font-medium text-[#0F172A] transition-colors duration-150 hover:bg-[#F5F7FA] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087C80]"
               >
-                <LogOut className="h-3.5 w-3.5" strokeWidth={2} />
+                <LogOut className="h-3.5 w-3.5 text-[#64748B]" strokeWidth={1.75} />
                 <span className="hidden sm:inline">Sign out</span>
               </button>
             </>

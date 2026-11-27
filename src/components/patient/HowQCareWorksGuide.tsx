@@ -19,7 +19,7 @@ export const HowQCareWorksGuide: React.FC = () => {
   });
 
   return (
-    <div className="bg-gradient-to-r from-teal-50/80 via-slate-50 to-teal-50/80 rounded-2xl sm:rounded-3xl border border-teal-200/80 p-3.5 sm:p-5 shadow-xs transition-all">
+    <div className="bg-gradient-to-r from-teal-50/80 via-slate-50 to-teal-50/80 rounded-2xl sm:rounded-3xl border border-teal-200/80 p-3.5 sm:p-5 shadow-xs transition-colors duration-150">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-9 h-9 rounded-2xl bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs">
@@ -27,14 +27,14 @@ export const HowQCareWorksGuide: React.FC = () => {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-sm sm:text-base font-extrabold text-obsidian-900 tracking-tight truncate">
+              <h2 className="text-sm sm:text-base font-extrabold text-obsidian-900 tracking-tight truncate text-balance leading-tight">
                 How Q-Care Works for You
               </h2>
               <span className="text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
                 Quick Guide
               </span>
             </div>
-            <p className="text-[11px] text-slate-500 mt-0.5 truncate sm:whitespace-normal">
+            <p className="text-[11px] text-slate-500 mt-0.5 truncate sm:whitespace-normal max-w-prose">
               4 simple steps that save you 45+ minutes in your diagnostic checkup.
             </p>
           </div>

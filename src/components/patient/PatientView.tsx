@@ -38,6 +38,7 @@ export const PatientView: React.FC = () => {
     currentHospital,
     currentRoutingPlan,
     clinicalReports,
+    prescriptions,
     queueTokens,
     departments,
     counters,
@@ -72,13 +73,20 @@ export const PatientView: React.FC = () => {
   if (!selectedPatient) {
     return (
       <div className="p-12 text-center text-slate-500 bg-white rounded-3xl border border-slate-200 shadow-sm font-sans">
-        No patient profile active. Please sign in via the clinical portal reception gate.
+        <p className="max-w-prose mx-auto leading-relaxed">
+          No patient profile active. Please sign in via the clinical portal reception gate.
+        </p>
       </div>
     );
   }
 
   // Reports belonging to this patient
   const patientReports = clinicalReports.filter(r => r.patientId === selectedPatient.id);
+
+  // Prescriptions belonging to this patient
+  const patientPrescriptions = prescriptions.filter(
+    rx => rx.patientId === selectedPatient.id || rx.patientUhid.toUpperCase() === selectedPatient.uhid.toUpperCase()
+  );
 
   // Patient tokens
   const patientTokens = queueTokens.filter(t => t.patientId === selectedPatient.id);
@@ -149,22 +157,24 @@ export const PatientView: React.FC = () => {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight truncate">
+              <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight truncate text-balance leading-tight">
                 {selectedPatient.name}
               </h2>
-              <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-lg border border-slate-200">
+              <span className="text-xs font-bold tabular-nums text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-lg border border-slate-200">
                 {selectedPatient.uhid}
               </span>
-              <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+              <span className="text-[11px] font-bold tabular-nums text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
                 {selectedPatient.age}Y • {selectedPatient.gender}
               </span>
-              <span className="text-[11px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 flex items-center gap-1">
-                <Droplet className="w-3 h-3 fill-current" />
-                <span>B+</span>
-              </span>
+              {Boolean((selectedPatient as typeof selectedPatient & { bloodGroup?: string }).bloodGroup) && (
+                <span className="text-[11px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 flex items-center gap-1">
+                  <Droplet className="w-3 h-3 fill-current" />
+                  <span>{(selectedPatient as typeof selectedPatient & { bloodGroup?: string }).bloodGroup}</span>
+                </span>
+              )}
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-              Physician: <strong className="text-slate-800">{selectedPatient.prescribedDoctorName}</strong> ({selectedPatient.prescribedDoctorRoom || 'Chamber 204'}) • Token <strong className="text-teal-800">#{selectedPatient.opdTokenNumber || 'OPD-104'}</strong>
+            <p className="text-xs text-slate-500 mt-1 tabular-nums leading-normal">
+              Physician: <strong className="text-slate-800">{selectedPatient.prescribedDoctorName}</strong> ({selectedPatient.prescribedDoctorRoom || currentHospital.doctorRoom || 'Consultation Room'}) • Token <strong className="text-teal-800">#{selectedPatient.opdTokenNumber || 'OPD'}</strong>
             </p>
           </div>
         </div>
@@ -174,7 +184,7 @@ export const PatientView: React.FC = () => {
           <button
             type="button"
             onClick={() => setShowHealthCard(true)}
-            className="px-3.5 py-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
+            className="px-3.5 py-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold flex items-center gap-1.5 transition-[background-color,transform] duration-150 shadow-xs cursor-pointer active:scale-95"
           >
             <QrCode className="w-3.5 h-3.5" />
             <span>Digital Health Card</span>
@@ -215,7 +225,7 @@ export const PatientView: React.FC = () => {
           <button
             type="button"
             onClick={navigateBack}
-            className="min-h-[40px] px-3.5 py-2 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shrink-0"
+            className="min-h-[40px] px-3.5 py-2 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-[background-color,transform] duration-150 active:scale-95 cursor-pointer shrink-0"
           >
             <ArrowLeft className="w-4 h-4 text-slate-500" />
             <span>{language === 'hi' ? 'वापस' : 'Back'}</span>
@@ -224,7 +234,7 @@ export const PatientView: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('journey')}
-          className={`min-h-[40px] py-2 px-3.5 sm:px-4 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+          className={`min-h-[40px] py-2 px-3.5 sm:px-4 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-[background-color,border-color,color] duration-150 cursor-pointer whitespace-nowrap ${
             activeTab === 'journey'
               ? 'bg-teal-700 text-white shadow-xs'
               : 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200'
@@ -236,7 +246,7 @@ export const PatientView: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('prescriptions')}
-          className={`min-h-[40px] py-2 px-3.5 sm:px-4 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+          className={`min-h-[40px] py-2 px-3.5 sm:px-4 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-[background-color,border-color,color] duration-150 cursor-pointer whitespace-nowrap ${
             activeTab === 'prescriptions'
               ? 'bg-teal-700 text-white shadow-xs'
               : 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200'
@@ -244,14 +254,22 @@ export const PatientView: React.FC = () => {
         >
           <Pill className="w-4 h-4 shrink-0" />
           <span>{language === 'hi' ? 'प्रिस्क्रिप्शन व दवा' : 'Prescriptions & Rx'}</span>
-          <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold bg-slate-100 text-slate-700">
-            Active
-          </span>
+          {patientPrescriptions.length > 0 && (
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold tabular-nums ${
+              activeTab === 'prescriptions' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+            }`}>
+              {patientPrescriptions[0].status === 'fully_dispensed'
+                ? 'Dispensed'
+                : patientPrescriptions[0].status === 'partially_dispensed'
+                ? 'Partial'
+                : patientPrescriptions.length}
+            </span>
+          )}
         </button>
 
         <button
           onClick={() => setActiveTab('reports')}
-          className={`min-h-[40px] py-2 px-3.5 sm:px-4 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+          className={`min-h-[40px] py-2 px-3.5 sm:px-4 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-[background-color,border-color,color] duration-150 cursor-pointer whitespace-nowrap ${
             activeTab === 'reports'
               ? 'bg-teal-700 text-white shadow-xs'
               : 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200'
@@ -270,7 +288,7 @@ export const PatientView: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('map')}
-          className={`min-h-[40px] py-2 px-3.5 sm:px-4 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+          className={`min-h-[40px] py-2 px-3.5 sm:px-4 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-[background-color,border-color,color] duration-150 cursor-pointer whitespace-nowrap ${
             activeTab === 'map'
               ? 'bg-teal-700 text-white shadow-xs'
               : 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200'
@@ -282,7 +300,7 @@ export const PatientView: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('history')}
-          className={`min-h-[40px] py-2 px-3.5 sm:px-4 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+          className={`min-h-[40px] py-2 px-3.5 sm:px-4 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-[background-color,border-color,color] duration-150 cursor-pointer whitespace-nowrap ${
             activeTab === 'history'
               ? 'bg-teal-700 text-white shadow-xs'
               : 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200'
@@ -350,10 +368,10 @@ export const PatientView: React.FC = () => {
                   <Compass className="w-5 h-5 text-teal-700" />
                 </div>
                 <div>
-                  <h3 className="text-base font-extrabold text-slate-900 tracking-tight">
+                  <h3 className="text-base font-extrabold text-slate-900 tracking-tight leading-tight text-balance">
                     {language === 'hi' ? 'अस्पताल फ्लोर मैप व लाइव नेविगेशन' : 'Hospital Indoor Navigation & Blueprint'}
                   </h3>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-slate-500 max-w-prose leading-relaxed">
                     {language === 'hi' ? 'अपनी मंजिल व सभी जांच कमरों का लाइव ब्लूप्रिंट देखें' : 'Architectural floor plan with active room queues, walking routes, and live wayfinding.'}
                   </p>
                 </div>

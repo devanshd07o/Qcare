@@ -18,7 +18,7 @@ export const PrintableSlip: React.FC<PrintableSlipProps> = ({
   departments,
   onClose
 }) => {
-  const { currentHospital, selectAndLoginPatient, counters, queueTokens, clinicalReports } = useHospitalStore();
+  const { currentHospital, selectAndLoginPatient, activeRole, selectedPatient, counters, queueTokens, clinicalReports } = useHospitalStore();
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
 
   const slipEstimate = React.useMemo(
@@ -50,23 +50,8 @@ export const PrintableSlip: React.FC<PrintableSlipProps> = ({
 
   useEffect(() => {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://qcare.app';
-    const payloadObj = {
-      id: patient.id,
-      uhid: patient.uhid,
-      name: patient.name,
-      age: patient.age,
-      gender: patient.gender,
-      contact: patient.contact,
-      token: patient.opdTokenNumber,
-      tests: patient.prescribedTests,
-      status: patient.status,
-      docStatus: patient.doctorReviewStatus,
-      route: patient.assignedSmartRoute,
-      locked: patient.currentLockedDestinationTestId
-    };
-    const payloadEncoded = encodeURIComponent(btoa(JSON.stringify(payloadObj)));
-    // Unique per patient via qrSessionId — different QR for every patient
-    const url = `${origin}/?session=${patient.qrSessionId}&p=${payloadEncoded}`;
+    // Privacy-safe minimal QR URL: session ID + hospital code only (zero raw PII/contact/symptoms)
+    const url = `${origin}/?session=${encodeURIComponent(patient.qrSessionId)}&h=${encodeURIComponent(currentHospital.code)}`;
     setQrCodeDataUrl('');
 
     QRCode.toDataURL(url, {
@@ -77,9 +62,15 @@ export const PrintableSlip: React.FC<PrintableSlipProps> = ({
     })
       .then(d => setQrCodeDataUrl(d))
       .catch(() => {});
-  }, [patient.id, patient.uhid, patient.qrSessionId, JSON.stringify(patient.prescribedTests)]);
+  }, [currentHospital.code, patient.qrSessionId]);
 
-  const handleOpenPatientPass = () => { onClose(); selectAndLoginPatient(patient.id); };
+  const isAlreadyViewingThisPatient = activeRole === 'patient' && selectedPatient?.id === patient.id;
+  const handleOpenPatientPass = () => {
+    onClose();
+    if (!isAlreadyViewingThisPatient) {
+      selectAndLoginPatient(patient.id);
+    }
+  };
 
   const prescribedList = patient.prescribedTests.map(id => {
     const test = tests.find(t => t.id === id);
@@ -166,7 +157,7 @@ export const PrintableSlip: React.FC<PrintableSlipProps> = ({
 
               {/* Token + Name */}
               <div className="space-y-1">
-                <p className="font-mono text-[11px] text-teal-600 tabular-nums tracking-widest uppercase">
+                <p className="text-[11px] font-semibold text-teal-600 tabular-nums tracking-widest uppercase">
                   {patient.opdTokenNumber} · {patient.registrationTime}
                 </p>
                 <h2
@@ -208,7 +199,7 @@ export const PrintableSlip: React.FC<PrintableSlipProps> = ({
               >
                 {!hasTests ? (
                   <div className="py-2.5 flex gap-3">
-                    <span className="font-mono text-[10px] text-slate-300 w-3 shrink-0 tabular-nums pt-px">1</span>
+                    <span className="text-[10px] font-semibold text-slate-300 w-3 shrink-0 tabular-nums pt-px">1</span>
                     <div>
                       <p className="text-[12px] font-semibold text-slate-800">OPD Consultation</p>
                       <p className="text-[11px] text-slate-400">
@@ -220,7 +211,7 @@ export const PrintableSlip: React.FC<PrintableSlipProps> = ({
                   <>
                     {prescribedList.map(({ test, dept }, idx) => (
                       <div key={test?.id || idx} className="py-2.5 flex gap-3">
-                        <span className="font-mono text-[10px] text-slate-300 w-3 shrink-0 tabular-nums pt-px">
+                        <span className="text-[10px] font-semibold text-slate-300 w-3 shrink-0 tabular-nums pt-px">
                           {idx + 1}
                         </span>
                         <div>
@@ -230,7 +221,7 @@ export const PrintableSlip: React.FC<PrintableSlipProps> = ({
                       </div>
                     ))}
                     <div className="py-2.5 flex gap-3">
-                      <span className="font-mono text-[10px] text-slate-300 w-3 shrink-0 tabular-nums pt-px">
+                      <span className="text-[10px] font-semibold text-slate-300 w-3 shrink-0 tabular-nums pt-px">
                         {prescribedList.length + 1}
                       </span>
                       <div>
@@ -277,7 +268,7 @@ export const PrintableSlip: React.FC<PrintableSlipProps> = ({
                   </div>
                 )}
                 <p className="text-[10px] text-slate-400 text-center">Scan to open live pass</p>
-                <p className="font-mono text-[9.5px] text-teal-500 tabular-nums">{patient.uhid}</p>
+                <p className="text-[9.5px] font-semibold text-teal-500 tabular-nums">{patient.uhid}</p>
               </div>
 
               {/* Actions — 2 only */}
@@ -285,10 +276,10 @@ export const PrintableSlip: React.FC<PrintableSlipProps> = ({
                 <button
                   type="button"
                   onClick={handleOpenPatientPass}
-                  data-tooltip="Open patient live boarding pass"
+                  data-tooltip={isAlreadyViewingThisPatient ? 'Return to live boarding pass' : 'Open patient live boarding pass'}
                   className="w-full py-2.5 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-semibold transition-colors duration-150 cursor-pointer"
                 >
-                  Open Live Pass
+                  {isAlreadyViewingThisPatient ? 'Return to Live Pass' : 'Open Live Pass'}
                 </button>
                 <button
                   type="button"

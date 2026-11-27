@@ -49,11 +49,11 @@ export default {
         }
       },
       fontFamily: {
-        heading: ['Comfortaa', 'sans-serif'],
-        comfortaa: ['Comfortaa', 'sans-serif'],
-        body: ['Epilogue', 'Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
-        epilogue: ['Epilogue', 'sans-serif'],
-        sans: ['Epilogue', 'Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        heading: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        comfortaa: ['Inter', 'sans-serif'],
+        body: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        epilogue: ['Inter', 'sans-serif'],
+        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
       },
       boxShadow: {
         'paper-sm': '0 1px 2px rgba(15, 23, 42, 0.05)',

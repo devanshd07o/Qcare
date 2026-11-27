@@ -7,30 +7,28 @@ import { PatientPortal } from './components/patient/PatientPortal';
 import { LabPortal } from './components/lab/LabPortal';
 import { PharmacyPortal } from './components/pharmacy/PharmacyPortal';
 import { GlobalTooltip } from './components/common/GlobalTooltip';
-import { Sparkles, X, ShieldCheck } from 'lucide-react';
+import { SiteFooter } from './components/common/SiteFooter';
 
 export default function App() {
   const {
     currentUser,
     activeRole,
+    doctorSidebarExpanded,
     currentHospital,
     toastNotification,
     dismissToast,
     loginAsPatientWithSession
   } = useHospitalStore();
 
-  // Expose store for test verification in development
   useEffect(() => {
     if (typeof window !== 'undefined') {
       (window as any).__hospitalStore = useHospitalStore;
     }
   }, []);
 
-  // SPA Browser History Interception & Native Back Protection
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // Guarantee initial browser history entry so hitting back never exits/closes the website tab
     try {
       if (!window.history.state || !window.history.state.qcare) {
         window.history.replaceState({ qcare: true, root: true, depth: 0 }, '');
@@ -39,15 +37,12 @@ export default function App() {
     } catch {}
 
     const handlePopState = () => {
-      // If internal in-app back button triggered this popstate, consume and exit
       if (isInternalNavigationBack()) {
         return;
       }
 
-      // Execute internal store back navigation
       const handled = navigateBackAction(true);
       if (!handled) {
-        // If already at root screen (AuthScreen), push trap state back to prevent browser tab closure
         try {
           window.history.pushState({ qcare: true, depth: 1 }, '');
         } catch {}
@@ -60,7 +55,6 @@ export default function App() {
     };
   }, []);
 
-  // Sync hospital from URL (?hospital=... or ?h=...)
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
@@ -69,12 +63,9 @@ export default function App() {
       if (hospParam && hospParam.trim() && hospParam.trim().toUpperCase() !== currentHospital.code) {
         setHospitalByCodeAction(hospParam.trim());
       }
-    } catch {
-      // Safe catch for query string parsing
-    }
+    } catch {}
   }, [currentHospital.code]);
 
-  // Auto-login from QR Code scan (?session=... or ?token=...)
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
@@ -84,12 +75,9 @@ export default function App() {
       if (session) {
         loginAsPatientWithSession(session, payload);
       }
-    } catch {
-      // Safe catch for query string parsing
-    }
+    } catch {}
   }, [loginAsPatientWithSession]);
 
-  // Auto-dismiss toast notification after 4.5 seconds
   useEffect(() => {
     if (!toastNotification) return;
     const timer = setTimeout(() => {
@@ -98,18 +86,17 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [toastNotification, dismissToast]);
 
-  // If user is not signed in and no QR session is active, render the dedicated Auth Gate
   if (!currentUser) {
     return <AuthScreen />;
   }
 
   return (
     <div className="min-h-screen text-slate-900 flex flex-col font-sans selection:bg-blue-600 selection:text-white relative glass-page-bg">
-      {/* Top Clinical Header Bar - Fixed with Rounded Island */}
+      {/* Top Clinical Header Bar */}
       <Header />
 
-      {/* Main Dedicated Portal Views */}
-      <main className={`flex-1 w-full pt-[80px] pb-4 ${activeRole === 'doctor' ? 'px-3 sm:px-4' : 'max-w-7xl mx-auto px-3 sm:px-6'}`}>
+      {/* Main Dedicated Portal Views — Flush L-Shell Canvas with Generous Breathing Room */}
+      <main className={`flex-1 w-full pb-4 ${activeRole === 'doctor' ? 'pt-[64px] px-0' : 'pt-[94px] max-w-7xl mx-auto px-3 sm:px-6'}`}>
         {activeRole === 'doctor' && <DoctorPortal />}
         {activeRole === 'patient' && <PatientPortal />}
         {activeRole === 'lab_tech' && <LabPortal />}
@@ -122,27 +109,14 @@ export default function App() {
         )}
       </main>
 
-      {/* Universal Liquid Glass Tooltip Engine */}
       <GlobalTooltip />
 
-      {/* Clean Hospital Footer */}
-      <footer className={`border-t border-slate-200/80 bg-white/70 backdrop-blur-md py-3 text-xs text-slate-500 print:hidden mt-auto ${activeRole === 'doctor' ? 'md:pl-[76px]' : ''}`}>
-        <div className={`${activeRole === 'doctor' ? 'w-full px-3 sm:px-4' : 'max-w-7xl mx-auto px-4 sm:px-6'} flex items-center justify-between gap-2`}>
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-slate-700">Qcare</span>
-            <span className="text-slate-300">·</span>
-            <span>{currentHospital.name}</span>
-          </div>
-          <div className="flex items-center gap-3 text-[11px] text-slate-500">
-            <a href="#support" className="hover:text-slate-800 transition-colors">Support</a>
-            <span>·</span>
-            <a href="#privacy" className="hover:text-slate-800 transition-colors">Privacy</a>
-            <span>·</span>
-            <a href="#terms" className="hover:text-slate-800 transition-colors">Terms</a>
-          </div>
-        </div>
-      </footer>
+      {/* Deep Brand-Matched Floating Rounded Footer Synced with Sidebar Width */}
+      <SiteFooter
+        activeRole={activeRole}
+        hospital={currentHospital}
+        doctorSidebarExpanded={doctorSidebarExpanded}
+      />
     </div>
   );
 }
-

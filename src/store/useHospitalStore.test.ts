@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   registerPatientAction,
   prescribeTestsAction,
@@ -27,6 +27,12 @@ import {
   signOutAction,
   openSearchModalAction,
   closeSearchModalAction,
+  updatePatientVisitAndTestsAction,
+  reconcilePatientVisitAction,
+  issuePrescriptionAction,
+  dispenseMedicationsAction,
+  loginPharmacistAction,
+  applyExternalSyncAction,
   getHospitalState
 } from './useHospitalStore';
 import { findHospitalByQuery, REGISTERED_HOSPITALS } from '../data/mockHospitalData';
@@ -547,14 +553,24 @@ describe('Hospital State Machine & End-to-End Workflow', () => {
       expect(patAfter.status).not.toBe('discharged');
     });
 
-    it('loads doctor demo queue with staggered timestamps and reports ordered newest-first', () => {
+    it('loads doctor demo queue with staggered timestamps, canonical Room 104, Rx, and reports ordered newest-first', () => {
+      loginDoctorAction('Dr. Ananya Sen', undefined, 'Chamber 204', '', '', '1234', 'MAX-01');
       loadDoctorDemoPatientsAction();
       const s = getHospitalState();
-      expect(s.patients).toHaveLength(4);
-      expect(s.clinicalReports).toHaveLength(2);
+      expect(s.patients).toHaveLength(5);
+      expect(s.clinicalReports).toHaveLength(4);
+      expect(s.queueTokens).toHaveLength(6);
+      expect(s.prescriptions).toHaveLength(1);
+      expect(s.prescriptions[0].patientId).toBe('pat-bg-3');
       expect((s.clinicalReports[0].createdAtMs ?? 0)).toBeGreaterThanOrEqual(
         s.clinicalReports[1].createdAtMs ?? 0
       );
+      const patientIds = new Set(s.patients.map(p => p.id));
+      expect(s.queueTokens.every(t => patientIds.has(t.patientId))).toBe(true);
+      const ecgTokens = s.queueTokens.filter(t => t.departmentId === 'dept-cardio');
+      expect(ecgTokens.every(t => t.roomNo === 'Room 104')).toBe(true);
+      const ecgReports = s.clinicalReports.filter(r => r.testId === 'test-ecg');
+      expect(ecgReports.every(r => r.roomNo === 'Room 104')).toBe(true);
     });
 
     it('defaults doctorView to dashboard on login and supports switching views', () => {
@@ -564,6 +580,310 @@ describe('Hospital State Machine & End-to-End Workflow', () => {
       expect(getHospitalState().doctorView).toBe('walkin');
       loginDoctorAction('Dr. Ananya Sen', 'Max Super Speciality Hospital, Saket', 'Chamber 204', '', '', '1234', 'H001');
       expect(getHospitalState().doctorView).toBe('dashboard');
+    });
+  });
+
+  describe('Reported Bugs Regression & Pharmacy/Reconciliation TDD', () => {
+    beforeEach(() => {
+      resetToCleanSlateAction();
+    });
+
+    it('rejects unmatched loginPatientLookupAction without silently logging into Rameshwar or another patient', () => {
+      signOutAction();
+      const emptyRes = loginPatientLookupAction('WRONG-9999');
+      expect(emptyRes.success).toBe(false);
+      expect(emptyRes.error).toBeTruthy();
+      expect(getHospitalState().currentUser).toBeNull();
+      expect(getHospitalState().patients).toHaveLength(0);
+
+      // Even when another patient exists in live state, wrong lookup must NOT log into them or Rameshwar
+      loginDoctorAction('Dr. Ananya Sen', undefined, 'Chamber 204', '', '', '1234', 'MAX-01');
+      registerPatientAction({
+        name: 'Pooja Verma',
+        age: 31,
+        gender: 'Female',
+        contact: '9876543210',
+        chiefComplaint: 'Fever'
+      });
+      signOutAction();
+
+      const wrongRes = loginPatientLookupAction('WRONG-9999');
+      expect(wrongRes.success).toBe(false);
+      expect(wrongRes.error).toBeTruthy();
+      expect(getHospitalState().currentUser).toBeNull();
+      expect(getHospitalState().selectedPatientId).toBeNull();
+      expect(getHospitalState().patients.some(p => p.id === 'pat-rameshwar')).toBe(false);
+    });
+
+    it('rejects unknown QR sessions in loginAsPatientWithSessionAction without hijacking state.patients to Rameshwar', () => {
+      const pooja = registerPatientAction({
+        name: 'Pooja Verma',
+        age: 31,
+        gender: 'Female',
+        contact: '9876543210'
+      });
+      signOutAction();
+
+      expect(loginAsPatientWithSessionAction('QC-8888')).toBe(false);
+      expect(loginAsPatientWithSessionAction('QC-7886')).toBe(false);
+      expect(loginAsPatientWithSessionAction('DEMO-UNKNOWN')).toBe(false);
+
+      const sAfterInvalid = getHospitalState();
+      expect(sAfterInvalid.currentUser).toBeNull();
+      expect(sAfterInvalid.patients).toHaveLength(1);
+      expect(sAfterInvalid.patients[0].id).toBe(pooja.id);
+      expect(sAfterInvalid.patients.some(p => p.id === 'pat-rameshwar')).toBe(false);
+
+      // Live registered patient QR and exact canonical demo QC-9411 / QC-2026-9411 still resolve
+      expect(loginAsPatientWithSessionAction(pooja.qrSessionId)).toBe(true);
+      expect(getHospitalState().selectedPatientId).toBe(pooja.id);
+
+      resetToCleanSlateAction();
+      signOutAction();
+      expect(loginAsPatientWithSessionAction('QC-9411')).toBe(true);
+      expect(getHospitalState().currentUser?.identifier).toBe('QC-2026-9411');
+
+      resetToCleanSlateAction();
+      signOutAction();
+      expect(loginAsPatientWithSessionAction('QC-2026-9411')).toBe(true);
+      expect(getHospitalState().currentUser?.identifier).toBe('QC-2026-9411');
+    });
+
+    it('generates collision-free id, uhid, qrSessionId, and opdTokenNumber across rapid registrations', () => {
+      loadDoctorDemoPatientsAction();
+      for (let i = 1; i <= 150; i++) {
+        registerPatientAction({
+          name: `Unique Patient ${i}`,
+          age: 20 + (i % 50),
+          gender: i % 2 === 0 ? 'Male' : 'Female',
+          contact: `981234${String(i).padStart(4, '0')}`,
+          chiefComplaint: `Complaint ${i}`
+        });
+      }
+
+      const allPatients = getHospitalState().patients;
+      expect(new Set(allPatients.map(p => p.id)).size).toBe(allPatients.length);
+      expect(new Set(allPatients.map(p => p.uhid)).size).toBe(allPatients.length);
+      expect(new Set(allPatients.map(p => p.qrSessionId)).size).toBe(allPatients.length);
+      expect(new Set(allPatients.map(p => p.opdTokenNumber)).size).toBe(allPatients.length);
+    });
+
+    it('reconciles patient tests in-place without duplicating patients, preserving completed reports and cancelling removed waiting tokens', () => {
+      const pat = registerPatientAction({
+        name: 'Meera Nair',
+        age: 35,
+        gender: 'Female',
+        contact: '9876500001',
+        chiefComplaint: 'Fatigue'
+      });
+
+      prescribeTestsAction(pat.id, ['test-cbc', 'test-fbs'], 'normal');
+      const s1 = getHospitalState();
+      const cbcTokenId = s1.patients[0].activeTokenIds['test-cbc'];
+      const fbsTokenId = s1.patients[0].activeTokenIds['test-fbs'];
+
+      // Complete CBC so there is a completed test + uploaded ClinicalReport
+      completeTestAndUploadReportAction(cbcTokenId, { 'Hemoglobin (Hb)': '11.4' }, 'Collected');
+      expect(getHospitalState().clinicalReports).toHaveLength(1);
+
+      // Edit visit in-place: keep CBC (completed), remove FBS (waiting), add ECG (new)
+      const reconciled = updatePatientVisitAndTestsAction(pat.id, {
+        name: 'Meera Nair',
+        age: 36,
+        gender: 'Female',
+        contact: '9876500001',
+        chiefComplaint: 'Fatigue and mild palpitations',
+        testIds: ['test-cbc', 'test-ecg'],
+        doctorPriority: 'priority',
+        notes: 'Replaced FBS with ECG'
+      });
+
+      expect(reconciled).not.toBeNull();
+      const s2 = getHospitalState();
+      expect(s2.patients).toHaveLength(1);
+      const updated = s2.patients[0];
+      expect(updated.id).toBe(pat.id);
+      expect(updated.uhid).toBe(pat.uhid);
+      expect(updated.opdTokenNumber).toBe(pat.opdTokenNumber);
+      expect(updated.age).toBe(36);
+      expect(updated.completedTests).toContain('test-cbc');
+      expect(updated.prescribedTests).toEqual(['test-cbc', 'test-ecg']);
+      expect(s2.clinicalReports).toHaveLength(1);
+
+      // Cancelled waiting token for removed FBS, preserved completed CBC token, minted 1 new token for ECG
+      expect(s2.queueTokens.find(t => t.id === fbsTokenId)?.status).toBe('cancelled');
+      expect(s2.queueTokens.find(t => t.id === cbcTokenId)?.status).toBe('completed');
+      const ecgTokens = s2.queueTokens.filter(t => t.patientId === pat.id && t.testId === 'test-ecg' && t.status !== 'cancelled');
+      expect(ecgTokens).toHaveLength(1);
+      expect(updated.activeTokenIds['test-ecg']).toBe(ecgTokens[0].id);
+      expect(updated.activeTokenIds['test-fbs']).toBeUndefined();
+
+      // Alias reconcilePatientVisitAction also updates in-place cleanly without re-minting ECG
+      reconcilePatientVisitAction(pat.id, {
+        testIds: ['test-cbc', 'test-ecg']
+      });
+      const s3 = getHospitalState();
+      expect(s3.patients).toHaveLength(1);
+      expect(s3.queueTokens.filter(t => t.patientId === pat.id && t.testId === 'test-ecg' && t.status !== 'cancelled')).toHaveLength(1);
+    });
+
+    it('handles pharmacist auth, prescription issuance, partial/full dispensing, and immediate persistence flush', () => {
+      const storageMap = new Map<string, string>();
+      vi.stubGlobal('window', {});
+      vi.stubGlobal('localStorage', {
+        getItem: (k: string) => storageMap.get(k) ?? null,
+        setItem: (k: string, v: string) => { storageMap.set(k, v); },
+        removeItem: (k: string) => { storageMap.delete(k); }
+      });
+
+      try {
+        const badLogin = loginPharmacistAction('Pharm Priya', 'Max Pharmacy', '9999', 'MAX-01');
+        expect(badLogin.success).toBe(false);
+        expect(badLogin.error).toBe('Invalid PIN. Please try again.');
+
+        const pat = registerPatientAction({
+          name: 'Alok Nath',
+          age: 50,
+          gender: 'Male',
+          contact: '9811002200',
+          chiefComplaint: 'Fever and body ache'
+        });
+
+        const rx = issuePrescriptionAction(
+          pat.id,
+          [
+            {
+              drugName: 'Calpol / Dolo',
+              genericName: 'Paracetamol',
+              dose: '650mg',
+              frequency: 'Three times daily (TDS)',
+              duration: '3 days',
+              route: 'Oral',
+              quantity: '9 tablets'
+            },
+            {
+              drugName: 'Omez / Pan',
+              genericName: 'Omeprazole',
+              dose: '20mg',
+              frequency: 'Once daily (OD)',
+              duration: '5 days',
+              route: 'Oral',
+              quantity: '5 capsules'
+            }
+          ],
+          'Take after meals',
+          'Acute viral fever'
+        );
+
+        expect(rx).not.toBeNull();
+        expect(rx!.status).toBe('active');
+        expect(getHospitalState().prescriptions).toHaveLength(1);
+
+        // Immediate flush to localStorage (no 300ms wait required)
+        const persistedRaw = storageMap.get('qcare_v2_app_store_state');
+        expect(persistedRaw).toBeTruthy();
+        const persisted = JSON.parse(persistedRaw!);
+        expect(persisted.prescriptions).toHaveLength(1);
+        expect(persisted.patients.some((p: Patient) => p.id === pat.id)).toBe(true);
+
+        const goodLogin = loginPharmacistAction('Pharm Priya', 'Max Pharmacy', '1234', 'MAX-01');
+        expect(goodLogin.success).toBe(true);
+        expect(getHospitalState().activeRole).toBe('pharmacist');
+        expect(getHospitalState().currentUser?.role).toBe('pharmacist');
+
+        // Partial dispense (1 of 2 meds)
+        const rec1 = dispenseMedicationsAction(rx!.id, [rx!.medications[0].id], 'Pharm Priya', 'Max Pharmacy', 'Issued paracetamol');
+        expect(rec1).not.toBeNull();
+        let s = getHospitalState();
+        expect(s.prescriptions[0].status).toBe('partially_dispensed');
+        expect(s.prescriptions[0].medications[0].dispensed).toBe(true);
+        expect(s.prescriptions[0].medications[1].dispensed).toBe(false);
+        expect(s.dispenseRecords).toHaveLength(1);
+
+        // Remaining dispense (2 of 2 meds)
+        const rec2 = dispenseMedicationsAction(rx!.id, [rx!.medications[1].id], 'Pharm Priya', 'Max Pharmacy');
+        expect(rec2).not.toBeNull();
+        s = getHospitalState();
+        expect(s.prescriptions[0].status).toBe('fully_dispensed');
+        expect(s.prescriptions[0].medications.every(m => m.dispensed)).toBe(true);
+        expect(s.dispenseRecords).toHaveLength(2);
+
+        // Duplicate-dispense guard: attempting to dispense already-dispensed meds returns null
+        const dupDispense = dispenseMedicationsAction(rx!.id, [rx!.medications[0].id], 'Pharm Priya', 'Max Pharmacy');
+        expect(dupDispense).toBeNull();
+        expect(getHospitalState().dispenseRecords).toHaveLength(2);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('enforces duplicate-submission guards on consultation sign-off & Rx publish, cancels in-progress tokens, preserves dynamic patients on demo activation, and blocks stale cross-tab sync', () => {
+      // 1. Register dynamic patient & start an in_progress test
+      const dynPat = registerPatientAction({
+        name: 'Deepak Malhotra',
+        age: 40,
+        gender: 'Male',
+        contact: '9876001122',
+        chiefComplaint: 'Chest discomfort'
+      });
+      prescribeTestsAction(dynPat.id, ['test-cbc', 'test-fbs']);
+      const fbsTokId = getHospitalState().patients.find(p => p.id === dynPat.id)!.activeTokenIds['test-fbs'];
+      callPatientAction(fbsTokId);
+      expect(getHospitalState().callingAlert).not.toBeNull();
+
+      // Remove FBS while called/in-progress -> explicitly cancelled and callingAlert cleared
+      updatePatientVisitAndTestsAction(dynPat.id, {
+        testIds: ['test-cbc']
+      });
+      const afterCancel = getHospitalState();
+      expect(afterCancel.queueTokens.find(t => t.id === fbsTokId)?.status).toBe('cancelled');
+      expect(afterCancel.callingAlert).toBeNull();
+
+      // 2. Duplicate Rx publish guard (rapid identical double-submit returns existing Rx without duplicating)
+      const medInput = [{
+        drugName: 'Calpol / Dolo',
+        genericName: 'Paracetamol',
+        dose: '650mg',
+        frequency: 'Three times daily (TDS)',
+        duration: '3 days',
+        route: 'Oral'
+      }];
+      const rx1 = issuePrescriptionAction(dynPat.id, medInput, 'After food', 'Pyrexia');
+      const rx2 = issuePrescriptionAction(dynPat.id, medInput, 'After food', 'Pyrexia');
+      expect(rx1?.id).toBe(rx2?.id);
+      expect(getHospitalState().prescriptions.filter(r => r.patientId === dynPat.id)).toHaveLength(1);
+
+      // 3. Duplicate consultation sign-off guard
+      verifyAndDischargePatientAction(dynPat.id, 'First discharge');
+      verifyAndDischargePatientAction(dynPat.id, 'Accidental double click');
+      expect(getHospitalState().patients.find(p => p.id === dynPat.id)?.notes).toBe('First discharge');
+
+      // 4. Demo activation (QC-9411) MUST NOT overwrite dynamic patients
+      expect(loginAsPatientWithSessionAction('QC-9411')).toBe(true);
+      const afterDemo = getHospitalState();
+      expect(afterDemo.patients.some(p => p.id === dynPat.id)).toBe(true);
+      expect(afterDemo.patients.some(p => p.id === 'pat-rameshwar')).toBe(true);
+
+      // 5. Strict QR payload validation rejects mismatched hospitalCode
+      const wrongHospB64 = btoa(JSON.stringify({
+        uhid: 'QC-2026-8899',
+        name: 'Wrong Hosp Patient',
+        hospitalCode: 'AIIMS-03'
+      }));
+      expect(loginAsPatientWithSessionAction('QC-8899', wrongHospB64)).toBe(false);
+
+      // 6. Monotonic cross-tab sync guard ignores stale lower-version payload
+      const currentVer = getHospitalState().stateVersion;
+      applyExternalSyncAction({
+        patients: [],
+        queueTokens: [],
+        clinicalReports: [],
+        prescriptions: [],
+        dispenseRecords: [],
+        stateVersion: Math.max(0, currentVer - 2),
+        updatedAtMs: Date.now() - 60_000
+      });
+      expect(getHospitalState().patients.some(p => p.id === dynPat.id)).toBe(true);
     });
   });
 });

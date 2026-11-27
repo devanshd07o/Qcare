@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Comfortaa:wght@600;700&family=JetBrains+Mono:wght@400;500;600&family=Nunito+Sans:opsz,wght@6..12,400;6..12,500;6..12,600;6..12,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import './styles/liquidGlassTooltip.css';
 
 @tailwind base;
@@ -6,40 +6,40 @@
 @tailwind utilities;
 
 :root {
-  /* Hue Brand & Surface Tokens — Bright Clinical Light Mode */
-  --bg: #F8FAF9;
-  --bg-page: #F8FAF9;
+  /* Crisp Clinical Light Palette — #F5F7FA Canvas + #FFFFFF Surfaces + #102A43 Navy + #087C80 Teal */
+  --bg: #F5F7FA;
+  --bg-page: #F5F7FA;
   --bg-surface: #FFFFFF;
-  --bg-surface-subtle: #F1F5F4;
-  --bg-surface-hover: #F7FAFA;
+  --bg-surface-subtle: #F8FAFC;
+  --bg-surface-hover: #F8FAFC;
   --surface: #FFFFFF;
-  --panel: #F1F5F4;
+  --panel: #F8FAFC;
 
   /* Typography & Ink Tokens */
   --ink: #0F172A;
-  --ink-2: #475569;
+  --ink-2: #64748B;
   --ink-muted: #64748B;
   --text-primary: #0F172A;
-  --text-secondary: #475569;
+  --text-secondary: #64748B;
   --text-tertiary: #64748B;
 
   /* Border & Ring Tokens */
-  --line: #CBD5D3;
-  --border-subtle: #E2E8E7;
-  --border-default: #CBD5D3;
-  --border-input: #94A3A0;
-  --border-input-hover: #647470;
-  --focus-ring: rgba(13, 148, 136, 0.22);
+  --line: #E2E8F0;
+  --border-subtle: #E2E8F0;
+  --border-default: #E2E8F0;
+  --border-input: #CBD5E1;
+  --border-input-hover: #94A3B8;
+  --focus-ring: rgba(8, 124, 128, 0.2);
 
-  /* Brand Accent Tokens (Bright Clinical Teal) */
-  --primary: #0F766E;
-  --primary-bright: #0D9488;
-  --primary-hover: #0B5E57;
-  --primary-soft: #E6F5F3;
-  --accent-primary: #0F766E;
-  --accent-primary-bright: #0D9488;
-  --accent-primary-hover: #0B5E57;
-  --accent-subtle: #E6F5F3;
+  /* Brand Accent Tokens (#087C80 Clinical Teal) */
+  --primary: #087C80;
+  --primary-bright: #087C80;
+  --primary-hover: #066569;
+  --primary-soft: #E6F4F4;
+  --accent-primary: #087C80;
+  --accent-primary-bright: #087C80;
+  --accent-primary-hover: #066569;
+  --accent-subtle: #E6F4F4;
 
   /* Semantic Status Tokens */
   --status-success: #047857;
@@ -49,14 +49,24 @@
   --status-warning-bg: #FFFBEB;
   --status-warning-border: #FDE68A;
   --status-neutral: #334155;
-  --status-neutral-bg: #F1F5F4;
-  --status-neutral-border: #CBD5D3;
+  --status-neutral-bg: #F1F5F9;
+  --status-neutral-border: #E2E8F0;
 
-  /* Investigation Timeline Segment Tokens */
-  --seg-1: #0F766E;
+  /* Clinical Navy Chrome (#102A43) + Footer */
+  --sidebar-bg: #102A43;
+  --footer-bg: #102A43;
+  --footer-surface: #1A365D;
+  --footer-surface-hover: #23466E;
+  --footer-border: rgba(255, 255, 255, 0.12);
+  --footer-text: #F8FAFC;
+  --footer-muted: #CBD5E1;
+  --footer-accent: #38BDF8;
+
+  /* Segment Tokens */
+  --seg-1: #087C80;
   --seg-2: #0284C7;
   --seg-3: #D97706;
-  --seg-4: #4F46E5;
+  --seg-4: #475569;
   --seg-5: #059669;
 
   /* Error Tokens */
@@ -66,38 +76,51 @@
   --danger-ring: rgba(220, 38, 38, 0.16);
 
   /* Compatibility Aliases */
-  --color-bg-page: #F8FAF9;
+  --color-bg-page: #F5F7FA;
   --color-bg-card: #FFFFFF;
-  --color-brand-teal: #0F766E;
-  --color-brand-teal-hover: #0B5E57;
-  --color-accent-amber: #8C3707;
+  --color-brand-teal: #087C80;
+  --color-brand-teal-hover: #066569;
+  --color-accent-amber: #B45309;
   --color-error-red: #B91C1C;
   --color-neutral-900: #0F172A;
   --color-neutral-700: #334155;
   --color-neutral-500: #64748B;
-  --color-neutral-300: #CBD5D3;
-  --color-neutral-200: #E2E8E7;
-  --color-neutral-100: #F1F5F4;
+  --color-neutral-300: #CBD5E1;
+  --color-neutral-200: #E2E8F0;
+  --color-neutral-100: #F1F5F9;
   --radius-default: 10px;
+
+  /* Typography Tokens (/better-typography) */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
 }
 
 @layer base {
   html, body {
     overflow-x: clip;
     font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font-sans);
     background-color: var(--bg-page);
     color: var(--text-primary);
     line-height: 1.5;
+    text-wrap: pretty;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font-sans);
     text-wrap: balance;
     overflow-wrap: break-word;
   }
@@ -125,6 +148,16 @@
 
   input, textarea, select {
     user-select: text !important;
+  }
+
+  /* Prevent iOS mobile auto-zoom on form controls < 16px */
+  @media (max-width: 767px) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    textarea,
+    select {
+      font-size: max(1rem, 16px);
+      line-height: 1.5;
+    }
   }
 }
 
@@ -314,13 +347,168 @@
   box-shadow: 0 4px 14px -2px rgba(15, 118, 110, 0.14);
 }
 
-/* Page root background — bright clinical alabaster environment */
+/* Page root background — flat clinical neutral canvas (#F5F7FA) */
 .glass-page-bg {
-  background:
-    radial-gradient(960px 420px at 8% 0%, rgba(13, 148, 136, 0.06) 0%, transparent 60%),
-    radial-gradient(760px 360px at 94% 0%, rgba(16, 185, 129, 0.05) 0%, transparent 55%),
-    var(--bg-page);
+  background-color: #F5F7FA;
   min-height: 100vh;
+}
+
+/* ==========================================
+   QCARE CLINICAL HEADER, SIDEBAR & FOOTER
+   ========================================== */
+.qc-clinical-header {
+  background-color: #FFFFFF;
+  border-bottom: 1px solid #E2E8F0;
+}
+
+.qc-header-bar {
+  background-color: #FFFFFF;
+  border: 1px solid #E2E8F0;
+}
+
+.qc-clinical-sidebar {
+  background-color: #102A43;
+}
+
+.qc-clinical-card {
+  background-color: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+}
+
+.qc-primary-cta {
+  background-color: #087C80;
+  border: 1px solid #087C80;
+  border-radius: 8px;
+  transition: background-color 150ms ease;
+}
+
+.qc-primary-cta:hover {
+  background-color: #066569;
+  border-color: #066569;
+}
+
+.qc-site-footer {
+  background-color: #102A43;
+  color: var(--footer-text);
+  border: 1px solid #1E3A5F;
+}
+
+.qc-footer-heading::after {
+  content: "";
+  display: block;
+  width: 24px;
+  height: 2px;
+  margin-top: 8px;
+  border-radius: 2px;
+  background: var(--footer-accent);
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: left center;
+}
+
+.qc-footer-col:hover .qc-footer-heading::after {
+  transform: scaleX(1.35);
+}
+
+.qc-footer-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  color: var(--footer-muted);
+  white-space: nowrap;
+  transition: color 180ms ease;
+}
+
+.qc-footer-link-label {
+  position: relative;
+  display: inline-block;
+  line-height: 1.4;
+}
+
+.qc-footer-link-label::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  width: 100%;
+  height: 1.5px;
+  border-radius: 1px;
+  background: var(--footer-accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.qc-footer-link:hover,
+.qc-footer-link:focus-visible {
+  color: var(--footer-text);
+}
+
+.qc-footer-link:hover .qc-footer-link-label::before,
+.qc-footer-link:focus-visible .qc-footer-link-label::before {
+  transform: scaleX(1);
+}
+
+.qc-footer-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translate(-50%, 4px);
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--footer-surface);
+  border: 1px solid var(--footer-border);
+  color: var(--footer-text);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 10;
+  transition: opacity 180ms ease, transform 180ms ease, visibility 180ms ease;
+}
+
+.qc-to-top:hover .qc-footer-tooltip,
+.qc-to-top:focus-visible .qc-footer-tooltip,
+.qc-to-top:hover + .qc-footer-tooltip,
+.qc-to-top:focus-visible + .qc-footer-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+
+.qc-to-top {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--footer-surface);
+  border: 1px solid var(--footer-border);
+  color: var(--footer-muted);
+  transition: color 180ms ease, border-color 180ms ease, transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.qc-to-top:hover,
+.qc-to-top:focus-visible {
+  color: var(--footer-accent);
+  border-color: var(--footer-accent);
+  transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qc-footer-heading::after,
+  .qc-footer-link,
+  .qc-footer-link-label::before,
+  .qc-footer-tooltip,
+  .qc-to-top {
+    transition: none !important;
+  }
 }
 
 /* Print Styles for Authentic Thermal QR Slip & Reports */

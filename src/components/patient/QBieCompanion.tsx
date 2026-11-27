@@ -250,8 +250,8 @@ export const QBieCompanion: React.FC<QBieCompanionProps> = ({
   useEffect(() => {
     if (chatMessages.length === 0) {
       const greeting = language === 'hi'
-        ? `à¤¨à¤®à¤¸à¥à¤¤à¥‡ ${patient.name.split(' ')[0]} à¤œà¥€! à¤®à¥ˆà¤‚ Q-Bie à¤¹à¥‚à¤ ðŸ¤–, Groq AI à¤¸à¤‚à¤šà¤¾à¤²à¤¿à¤¤ à¤…à¤¸à¥à¤ªà¤¤à¤¾à¤² à¤¸à¤¾à¤¥à¥€à¥¤ à¤®à¥ˆà¤‚ à¤¸à¤¬à¤¸à¥‡ à¤•à¤® à¤‡à¤‚à¤¤à¤œà¤¼à¤¾à¤° à¤®à¥‡à¤‚ à¤†à¤ªà¤•à¥€ à¤œà¤¾à¤‚à¤šà¥‡à¤‚ à¤ªà¥‚à¤°à¥€ à¤•à¤°à¤µà¤¾à¤¨à¥‡ à¤®à¥‡à¤‚ à¤®à¤¦à¤¦ à¤•à¤°à¥‚à¤à¤—à¤¾à¥¤ à¤®à¥à¤à¤¸à¥‡ à¤•à¥à¤› à¤­à¥€ à¤ªà¥‚à¤›à¥‡à¤‚!`
-        : `Hi ${patient.name.split(' ')[0]}! I'm Q-Bie, your Groq AI-powered hospital companion ðŸ¤–. I track all diagnostic queues in real-time. Ask me anything or tap any quick question below!`;
+        ? `नमस्ते ${patient.name.split(' ')[0]} जी! मैं Q-Bie हूँ, Groq AI संचालित अस्पताल साथी। मैं सबसे कम इंतज़ार में आपकी जांचें पूरी करवाने में मदद करूँगा। मुझसे कुछ भी पूछें!`
+        : `Hi ${patient.name.split(' ')[0]}! I'm Q-Bie, your Groq AI-powered hospital companion. I track all diagnostic queues in real-time. Ask me anything or tap any quick question below!`;
 
       setChatMessages([
         {
@@ -268,13 +268,13 @@ export const QBieCompanion: React.FC<QBieCompanionProps> = ({
     let userText = '';
 
     if (type === 'where') {
-      userText = language === 'hi' ? 'à¤®à¥à¤à¥‡ à¤…à¤­à¥€ à¤•à¤¹à¤¾à¤ à¤œà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤ à¤”à¤° à¤•à¤¿à¤¸ à¤•à¤®à¤°à¥‡ à¤®à¥‡à¤‚? ðŸ“' : 'Where should I go right now and in which room? ðŸ“';
+      userText = language === 'hi' ? 'मुझे अभी कहाँ जाना चाहिए और किस कमरे में?' : 'Where should I go right now and in which room?';
     } else if (type === 'why_skip') {
-      userText = language === 'hi' ? 'à¤¸à¥à¤®à¤¾à¤°à¥à¤Ÿ à¤°à¥‚à¤Ÿà¤¿à¤‚à¤— à¤¸à¥‡ à¤®à¥‡à¤°à¤¾ à¤¸à¤®à¤¯ à¤•à¥ˆà¤¸à¥‡ à¤¬à¤šà¤¤à¤¾ à¤¹à¥ˆ? âš¡' : 'Why did Q-Care optimize my test sequence? âš¡';
+      userText = language === 'hi' ? 'स्मार्ट रूटिंग से मेरा समय कैसे बचता है?' : 'Why did Q-Care optimize my test sequence?';
     } else if (type === 'explain_reports') {
-      userText = language === 'hi' ? 'à¤®à¥‡à¤°à¥€ à¤œà¤¾à¤‚à¤š à¤°à¤¿à¤ªà¥‹à¤°à¥à¤Ÿ à¤•à¥€ à¤•à¥à¤¯à¤¾ à¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤¹à¥ˆ? ðŸ“‹' : 'What is the status of my completed test reports? ðŸ“‹';
+      userText = language === 'hi' ? 'मेरी जांच रिपोर्ट की क्या स्थिति है?' : 'What is the status of my completed test reports?';
     } else if (type === 'how_called') {
-      userText = language === 'hi' ? 'à¤®à¥‡à¤°à¥€ à¤¬à¤¾à¤°à¥€ à¤•à¤¬ à¤”à¤° à¤•à¥ˆà¤¸à¥‡ à¤†à¤à¤—à¥€? ðŸ•’' : 'How will I know when my turn is called? ðŸ•’';
+      userText = language === 'hi' ? 'मेरी बारी कब और कैसे आएगी?' : 'How will I know when my turn is called?';
     }
 
     setChatMessages(prev => [...prev, { sender: 'user', text: userText, time: nowStr }]);
@@ -517,7 +517,7 @@ export const QBieCompanion: React.FC<QBieCompanionProps> = ({
               <div className="flex items-center justify-between px-1">
                 <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-1">
                   <Sparkles className="w-3 h-3 text-amber-500" />
-                  <span>{language === 'hi' ? 'à¤¤à¥à¤µà¤°à¤¿à¤¤ à¤ªà¥à¤°à¤¶à¥à¤¨ (1-à¤Ÿà¥ˆà¤ª)' : 'Quick Answers (1-Tap)'}</span>
+                  <span>{language === 'hi' ? 'त्वरित प्रश्न (1-टैप)' : 'Quick Answers (1-Tap)'}</span>
                 </span>
                 <span className="text-[10px] text-teal-700 font-bold">Fast Routing</span>
               </div>
@@ -527,7 +527,7 @@ export const QBieCompanion: React.FC<QBieCompanionProps> = ({
                   onClick={() => handleQuickQuestion('where')}
                   className="min-h-[44px] px-3 py-2 text-left bg-slate-50 hover:bg-teal-50 active:bg-teal-100 border border-slate-200 hover:border-teal-300 rounded-xl text-xs font-bold text-slate-800 hover:text-teal-900 transition-all flex items-center justify-between active:scale-98 cursor-pointer"
                 >
-                  <span className="truncate">ðŸ“ {language === 'hi' ? 'à¤•à¤¹à¤¾à¤ à¤œà¤¾à¤¨à¤¾ à¤¹à¥ˆ?' : 'Where to go now?'}</span>
+                  <span className="truncate">{language === 'hi' ? 'कहाँ जाना है?' : 'Where to go now?'}</span>
                   <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 </button>
 
@@ -536,7 +536,7 @@ export const QBieCompanion: React.FC<QBieCompanionProps> = ({
                   onClick={() => handleQuickQuestion('why_skip')}
                   className="min-h-[44px] px-3 py-2 text-left bg-slate-50 hover:bg-teal-50 active:bg-teal-100 border border-slate-200 hover:border-teal-300 rounded-xl text-xs font-bold text-slate-800 hover:text-teal-900 transition-all flex items-center justify-between active:scale-98 cursor-pointer"
                 >
-                  <span className="truncate">âš¡ {language === 'hi' ? 'à¤¸à¤®à¤¯ à¤•à¥ˆà¤¸à¥‡ à¤¬à¤šà¤¾?' : 'Why smart route?'}</span>
+                  <span className="truncate">{language === 'hi' ? 'समय कैसे बचा?' : 'Why smart route?'}</span>
                   <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 </button>
 
@@ -545,7 +545,7 @@ export const QBieCompanion: React.FC<QBieCompanionProps> = ({
                   onClick={() => handleQuickQuestion('explain_reports')}
                   className="min-h-[44px] px-3 py-2 text-left bg-slate-50 hover:bg-teal-50 active:bg-teal-100 border border-slate-200 hover:border-teal-300 rounded-xl text-xs font-bold text-slate-800 hover:text-teal-900 transition-all flex items-center justify-between active:scale-98 cursor-pointer"
                 >
-                  <span className="truncate">ðŸ“‹ {language === 'hi' ? 'à¤°à¤¿à¤ªà¥‹à¤°à¥à¤Ÿ à¤¸à¥à¤¥à¤¿à¤¤à¤¿' : 'Report status'}</span>
+                  <span className="truncate">{language === 'hi' ? 'रिपोर्ट स्थिति' : 'Report status'}</span>
                   <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 </button>
 
@@ -554,7 +554,7 @@ export const QBieCompanion: React.FC<QBieCompanionProps> = ({
                   onClick={() => handleQuickQuestion('how_called')}
                   className="min-h-[44px] px-3 py-2 text-left bg-slate-50 hover:bg-teal-50 active:bg-teal-100 border border-slate-200 hover:border-teal-300 rounded-xl text-xs font-bold text-slate-800 hover:text-teal-900 transition-all flex items-center justify-between active:scale-98 cursor-pointer"
                 >
-                  <span className="truncate">ðŸ•’ {language === 'hi' ? 'à¤®à¥‡à¤°à¥€ à¤¬à¤¾à¤°à¥€ à¤•à¤¬?' : 'How am I called?'}</span>
+                  <span className="truncate">{language === 'hi' ? 'मेरी बारी कब?' : 'How am I called?'}</span>
                   <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 </button>
               </div>
@@ -569,7 +569,7 @@ export const QBieCompanion: React.FC<QBieCompanionProps> = ({
                 type="text"
                 value={inputValue}
                 onChange={e => setInputValue(e.target.value)}
-                placeholder={language === 'hi' ? 'à¤•à¤®à¤°à¤¾, à¤«à¤¾à¤¸à¥à¤Ÿà¤¿à¤‚à¤— à¤¯à¤¾ à¤°à¤¿à¤ªà¥‹à¤°à¥à¤Ÿ à¤ªà¥‚à¤›à¥‡à¤‚...' : 'Ask Q-Bie (room, fasting, test)...'}
+                placeholder={language === 'hi' ? 'कमरा, फास्टिंग या रिपोर्ट पूछें...' : 'Ask Q-Bie (room, fasting, test)...'}
                 className="flex-1 h-11 px-3.5 bg-white border border-slate-300 rounded-2xl text-base text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
               />
               <button
@@ -611,7 +611,7 @@ export const QBieCompanion: React.FC<QBieCompanionProps> = ({
                 </div>
                 <p className="text-[10px] text-teal-100 flex items-center gap-1">
                   <Cpu className="w-2.5 h-2.5" />
-                  <span>qwen3.8-27b â€¢ Real Hospital Context</span>
+                  <span>Real Hospital Context</span>
                 </p>
               </div>
             </div>
@@ -669,7 +669,7 @@ export const QBieCompanion: React.FC<QBieCompanionProps> = ({
           {/* Quick Suggestions Chips */}
           <div className="p-2.5 bg-white border-t border-slate-100 space-y-1 shrink-0">
             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block px-1">
-              {language === 'hi' ? 'à¤¤à¥à¤µà¤°à¤¿à¤¤ à¤¸à¤¹à¤¾à¤¯à¤¤à¤¾' : 'Quick Questions'}
+              {language === 'hi' ? 'त्वरित सहायता' : 'Quick Questions'}
             </span>
             <div className="grid grid-cols-2 gap-1.5">
               <button
@@ -677,7 +677,7 @@ export const QBieCompanion: React.FC<QBieCompanionProps> = ({
                 onClick={() => handleQuickQuestion('where')}
                 className="p-1.5 text-left bg-slate-50 hover:bg-teal-50/70 border border-slate-200 rounded-xl text-[10px] font-semibold text-slate-700 hover:text-teal-800 transition-colors flex items-center justify-between cursor-pointer"
               >
-                <span className="truncate">ðŸ“ {language === 'hi' ? 'à¤•à¤¹à¤¾à¤ à¤œà¤¾à¤¨à¤¾ à¤¹à¥ˆ?' : 'Where to go now?'}</span>
+                <span className="truncate">{language === 'hi' ? 'कहाँ जाना है?' : 'Where to go now?'}</span>
                 <ChevronRight className="w-3 h-3 text-slate-400 shrink-0" />
               </button>
 
@@ -686,7 +686,7 @@ export const QBieCompanion: React.FC<QBieCompanionProps> = ({
                 onClick={() => handleQuickQuestion('why_skip')}
                 className="p-1.5 text-left bg-slate-50 hover:bg-teal-50/70 border border-slate-200 rounded-xl text-[10px] font-semibold text-slate-700 hover:text-teal-800 transition-colors flex items-center justify-between cursor-pointer"
               >
-                <span className="truncate">âš¡ {language === 'hi' ? 'à¤¸à¤®à¤¯ à¤•à¥ˆà¤¸à¥‡ à¤¬à¤šà¤¾?' : 'Why smart route?'}</span>
+                <span className="truncate">{language === 'hi' ? 'समय कैसे बचा?' : 'Why smart route?'}</span>
                 <ChevronRight className="w-3 h-3 text-slate-400 shrink-0" />
               </button>
 
@@ -695,7 +695,7 @@ export const QBieCompanion: React.FC<QBieCompanionProps> = ({
                 onClick={() => handleQuickQuestion('explain_reports')}
                 className="p-1.5 text-left bg-slate-50 hover:bg-teal-50/70 border border-slate-200 rounded-xl text-[10px] font-semibold text-slate-700 hover:text-teal-800 transition-colors flex items-center justify-between cursor-pointer"
               >
-                <span className="truncate">ðŸ“‹ {language === 'hi' ? 'à¤®à¥‡à¤°à¥€ à¤°à¤¿à¤ªà¥‹à¤°à¥à¤Ÿ à¤¸à¥à¤¥à¤¿à¤¤à¤¿' : 'Report status'}</span>
+                <span className="truncate">{language === 'hi' ? 'मेरी रिपोर्ट स्थिति' : 'Report status'}</span>
                 <ChevronRight className="w-3 h-3 text-slate-400 shrink-0" />
               </button>
 
@@ -704,7 +704,7 @@ export const QBieCompanion: React.FC<QBieCompanionProps> = ({
                 onClick={() => handleQuickQuestion('how_called')}
                 className="p-1.5 text-left bg-slate-50 hover:bg-teal-50/70 border border-slate-200 rounded-xl text-[10px] font-semibold text-slate-700 hover:text-teal-800 transition-colors flex items-center justify-between cursor-pointer"
               >
-                <span className="truncate">ðŸ•’ {language === 'hi' ? 'à¤®à¥‡à¤°à¥€ à¤¬à¤¾à¤°à¥€ à¤•à¤¬?' : 'How am I called?'}</span>
+                <span className="truncate">{language === 'hi' ? 'मेरी बारी कब?' : 'How am I called?'}</span>
                 <ChevronRight className="w-3 h-3 text-slate-400 shrink-0" />
               </button>
             </div>
@@ -716,8 +716,8 @@ export const QBieCompanion: React.FC<QBieCompanionProps> = ({
               type="text"
               value={inputValue}
               onChange={e => setInputValue(e.target.value)}
-              placeholder={language === 'hi' ? 'à¤«à¤¾à¤¸à¥à¤Ÿà¤¿à¤‚à¤—, à¤•à¤®à¤°à¤¾ à¤¯à¤¾ à¤°à¤¿à¤ªà¥‹à¤°à¥à¤Ÿ à¤•à¥‡ à¤¬à¤¾à¤°à¥‡ à¤®à¥‡à¤‚ à¤ªà¥‚à¤›à¥‡à¤‚...' : 'Ask Q-Bie anything (fasting, room, reports)...'}
-              className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent transition-all"
+              placeholder={language === 'hi' ? 'फास्टिंग, कमरा या रिपोर्ट के बारे में पूछें...' : 'Ask Q-Bie anything (fasting, room, reports)...'}
+              className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-base md:text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent transition-colors duration-150"
             />
             <button
               type="submit"

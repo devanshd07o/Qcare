@@ -65,10 +65,9 @@ export const ClinicalBoardingPass: React.FC<ClinicalBoardingPassProps> = ({
   onPrintSlip,
   hideProfileStrip = false
 }) => {
-  const { markTestCompletedByPatient, clinicalReports } = useHospitalStore();
+  const { markTestCompletedByPatient, clinicalReports, currentHospital } = useHospitalStore();
   const t = TRANSLATIONS[language];
-  const doctorRoom = patient.prescribedDoctorRoom || 
-    (patient.prescribedDoctorId === 'doc-01' ? 'Room 204' : patient.prescribedDoctorId === 'doc-02' ? 'Room 108' : 'Room 12');
+  const doctorRoom = patient.prescribedDoctorRoom || currentHospital.doctorRoom || 'Consultation Room';
 
   const isDischarged = patient.status === 'discharged' || patient.doctorReviewStatus === 'completed';
 
@@ -129,8 +128,8 @@ export const ClinicalBoardingPass: React.FC<ClinicalBoardingPassProps> = ({
     directiveBadgeColor = 'bg-emerald-700 text-white';
     directiveTitle = `${language === 'hi' ? 'अंतिम रिपोर्ट समीक्षा संपन्न:' : 'Care Summary: Finalized with'} ${patient.prescribedDoctorName}`;
     directiveSubtitle = language === 'hi'
-      ? `आपकी सभी जांचें व रिपोर्ट समीक्षा पूरी हो चुकी हैं। ओपीडी टोकन #${patient.opdTokenNumber || 'OPD-104'} संपन्न हुआ।`
-      : `Your final consultation, test evaluations, and report review are complete. You are discharged. OPD Token #${patient.opdTokenNumber || 'OPD-104'} is marked completed.`;
+      ? `आपकी सभी जांचें व रिपोर्ट समीक्षा पूरी हो चुकी हैं। ओपीडी टोकन #${patient.opdTokenNumber || 'OPD'} संपन्न हुआ।`
+      : `Your final consultation, test evaluations, and report review are complete. You are discharged. OPD Token #${patient.opdTokenNumber || 'OPD'} is marked completed.`;
     targetRoom = doctorRoom;
     targetLocation = language === 'hi' ? 'डिस्चार्ज' : 'Discharged / Completed';
     waitMinutesText = language === 'hi' ? 'पूर्ण' : 'Completed';
@@ -168,7 +167,7 @@ export const ClinicalBoardingPass: React.FC<ClinicalBoardingPassProps> = ({
     directiveBadge = language === 'hi' ? 'कदम 1: डॉक्टर से मिलें' : 'Step 1: Consult Doctor';
     directiveBadgeColor = 'bg-blue-600 text-white';
     directiveTitle = `${patient.prescribedDoctorName} ${language === 'hi' ? 'से परामर्श' : 'Consultation'}`;
-    directiveSubtitle = `${doctorRoom} ${language === 'hi' ? 'में परामर्श के लिए जाएं (टोकन #' : 'for your OPD consultation (Token #'}${patient.opdTokenNumber || 'OPD-100'}).`;
+    directiveSubtitle = `${doctorRoom} ${language === 'hi' ? 'में परामर्श के लिए जाएं (टोकन #' : 'for your OPD consultation (Token #'}${patient.opdTokenNumber || 'OPD'}).`;
     targetRoom = doctorRoom;
     targetLocation = 'OPD Floor';
     waitMinutesText = language === 'hi' ? 'पंजीकृत' : 'Check-in Complete';
@@ -201,7 +200,7 @@ export const ClinicalBoardingPass: React.FC<ClinicalBoardingPassProps> = ({
   }
 
   const activeTokenNumber = isDischarged
-    ? `${patient.opdTokenNumber || 'OPD-104'} (Done)`
+    ? `${patient.opdTokenNumber || 'OPD'} (Done)`
     : calledToken?.tokenNumber || (allCompleted && patient.opdTokenNumber ? patient.opdTokenNumber : upNextToken?.tokenNumber) || (effectiveStep ? `${effectiveStep.testCode}-0${effectiveStep.stepNumber}` : patient.opdTokenNumber || 'OPD-REG');
 
   return (
@@ -303,7 +302,7 @@ export const ClinicalBoardingPass: React.FC<ClinicalBoardingPassProps> = ({
             </span>
 
             {hideProfileStrip && (
-              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200 tabular-nums">
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-800 border border-slate-200 tabular-nums">
                 {t.token} {activeTokenNumber}
               </span>
             )}
@@ -334,10 +333,10 @@ export const ClinicalBoardingPass: React.FC<ClinicalBoardingPassProps> = ({
         </div>
 
         <div>
-          <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-obsidian-950 tracking-tight leading-snug">
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-obsidian-950 tracking-tight leading-snug text-balance">
             {directiveTitle}
           </h1>
-          <p className="text-xs sm:text-sm text-slate-600 mt-1 font-medium leading-relaxed max-w-2xl">
+          <p className="text-xs sm:text-sm text-slate-600 mt-1 font-medium leading-relaxed max-w-prose">
             {directiveSubtitle}
           </p>
         </div>
@@ -638,7 +637,7 @@ export const ClinicalBoardingPass: React.FC<ClinicalBoardingPassProps> = ({
                   Final Consultation with {patient.prescribedDoctorName} ({doctorRoom})
                 </div>
                 <div className="text-xs font-bold text-teal-700 mt-1 tabular-nums">
-                  OPD Token #{patient.opdTokenNumber || 'OPD-104'}
+                  OPD Token #{patient.opdTokenNumber || 'OPD'}
                 </div>
                 {allCompleted && (
                   <div className="text-[11px] font-bold text-emerald-800 mt-2 bg-emerald-100/90 px-2.5 py-1 rounded-xl border border-emerald-200">

@@ -1,5 +1,3 @@
-import { Patient, ClinicalReport } from '../types';
-
 export interface HistoricalPatientRecord {
   id: string;
   uhid: string;
@@ -17,18 +15,21 @@ export interface HistoricalPatientRecord {
   diagnosisNotes: string;
 }
 
-export const HISTORICAL_PATIENT_RECORDS: HistoricalPatientRecord[] = [
+export const DEFAULT_ARCHIVE_DOCTOR_NAME = 'Attending OPD Physician';
+export const DEFAULT_ARCHIVE_DOCTOR_ROOM = 'OPD Archive';
+
+const BASE_HISTORICAL_RECORDS: HistoricalPatientRecord[] = [
   {
     id: 'hist-001',
     uhid: 'QC-2026-8001',
     name: 'Harish Chandra Gupta',
     age: 58,
     gender: 'Male',
-    contact: '+91 98101 22341',
+    contact: '+91 97101 22341',
     visitDate: '2026-08-12',
     chiefComplaint: 'Routine Type-2 Diabetes quarterly review, morning dizziness',
-    prescribedDoctorName: 'Dr. Ananya Sen',
-    prescribedDoctorRoom: 'Chamber 204',
+    prescribedDoctorName: DEFAULT_ARCHIVE_DOCTOR_NAME,
+    prescribedDoctorRoom: DEFAULT_ARCHIVE_DOCTOR_ROOM,
     completedTests: ['test-fbs', 'test-cbc'],
     testNames: ['Blood Sugar Fasting', 'Complete Blood Count (CBC)'],
     status: 'completed',
@@ -40,11 +41,11 @@ export const HISTORICAL_PATIENT_RECORDS: HistoricalPatientRecord[] = [
     name: 'Kamla Devi Sharma',
     age: 64,
     gender: 'Female',
-    contact: '+91 98112 33452',
+    contact: '+91 97112 33452',
     visitDate: '2026-08-14',
     chiefComplaint: 'Bilateral knee stiffness, pain worsening while climbing stairs',
-    prescribedDoctorName: 'Dr. Ananya Sen',
-    prescribedDoctorRoom: 'Chamber 204',
+    prescribedDoctorName: DEFAULT_ARCHIVE_DOCTOR_NAME,
+    prescribedDoctorRoom: DEFAULT_ARCHIVE_DOCTOR_ROOM,
     completedTests: ['test-cbc', 'test-xray-chest'],
     testNames: ['Complete Blood Count', 'Digital Chest Radiography'],
     status: 'completed',
@@ -56,11 +57,11 @@ export const HISTORICAL_PATIENT_RECORDS: HistoricalPatientRecord[] = [
     name: 'Gurpreet Singh Anand',
     age: 42,
     gender: 'Male',
-    contact: '+91 98711 44563',
+    contact: '+91 97711 44563',
     visitDate: '2026-08-16',
     chiefComplaint: 'Exertional breathlessness and palpitation after walking 500m',
-    prescribedDoctorName: 'Dr. Ananya Sen',
-    prescribedDoctorRoom: 'Chamber 204',
+    prescribedDoctorName: DEFAULT_ARCHIVE_DOCTOR_NAME,
+    prescribedDoctorRoom: DEFAULT_ARCHIVE_DOCTOR_ROOM,
     completedTests: ['test-ecg', 'test-cbc'],
     testNames: ['12-Lead ECG', 'Complete Blood Count (CBC)'],
     status: 'completed',
@@ -72,11 +73,11 @@ export const HISTORICAL_PATIENT_RECORDS: HistoricalPatientRecord[] = [
     name: 'Pooja Saxena',
     age: 31,
     gender: 'Female',
-    contact: '+91 99100 55674',
+    contact: '+91 97100 55674',
     visitDate: '2026-08-18',
     chiefComplaint: 'Persistent fatigue, hair thinning, sensitivity to cold',
-    prescribedDoctorName: 'Dr. Ananya Sen',
-    prescribedDoctorRoom: 'Chamber 204',
+    prescribedDoctorName: DEFAULT_ARCHIVE_DOCTOR_NAME,
+    prescribedDoctorRoom: DEFAULT_ARCHIVE_DOCTOR_ROOM,
     completedTests: ['test-cbc', 'test-fbs'],
     testNames: ['Complete Blood Count', 'Fasting Blood Sugar'],
     status: 'completed',
@@ -88,11 +89,11 @@ export const HISTORICAL_PATIENT_RECORDS: HistoricalPatientRecord[] = [
     name: 'Rajendra Prasad Mehra',
     age: 69,
     gender: 'Male',
-    contact: '+91 98188 66785',
+    contact: '+91 97188 66785',
     visitDate: '2026-08-20',
     chiefComplaint: 'Chronic non-productive cough, mild night sweats for 3 weeks',
-    prescribedDoctorName: 'Dr. Ananya Sen',
-    prescribedDoctorRoom: 'Chamber 204',
+    prescribedDoctorName: DEFAULT_ARCHIVE_DOCTOR_NAME,
+    prescribedDoctorRoom: DEFAULT_ARCHIVE_DOCTOR_ROOM,
     completedTests: ['test-xray-chest', 'test-cbc'],
     testNames: ['Digital Chest Radiography (PA)', 'Complete Blood Count'],
     status: 'completed',
@@ -101,14 +102,14 @@ export const HISTORICAL_PATIENT_RECORDS: HistoricalPatientRecord[] = [
   {
     id: 'hist-006',
     uhid: 'QC-2026-8006',
-    name: 'Sunita Batra',
+    name: 'Sunita Narayanan',
     age: 47,
     gender: 'Female',
-    contact: '+91 98103 77896',
+    contact: '+91 97103 77896',
     visitDate: '2026-08-22',
     chiefComplaint: 'Upper quadrant postprandial heaviness after oily food',
-    prescribedDoctorName: 'Dr. Ananya Sen',
-    prescribedDoctorRoom: 'Chamber 204',
+    prescribedDoctorName: DEFAULT_ARCHIVE_DOCTOR_NAME,
+    prescribedDoctorRoom: DEFAULT_ARCHIVE_DOCTOR_ROOM,
     completedTests: ['test-usg-abdomen'],
     testNames: ['Whole Abdomen Sonography'],
     status: 'completed',
@@ -120,11 +121,11 @@ export const HISTORICAL_PATIENT_RECORDS: HistoricalPatientRecord[] = [
     name: 'Mohammad Tariq Khan',
     age: 53,
     gender: 'Male',
-    contact: '+91 98912 88907',
+    contact: '+91 97912 88907',
     visitDate: '2026-08-25',
     chiefComplaint: 'Annual corporate health checkup, mild borderline BP (138/88)',
-    prescribedDoctorName: 'Dr. Ananya Sen',
-    prescribedDoctorRoom: 'Chamber 204',
+    prescribedDoctorName: DEFAULT_ARCHIVE_DOCTOR_NAME,
+    prescribedDoctorRoom: DEFAULT_ARCHIVE_DOCTOR_ROOM,
     completedTests: ['test-fbs', 'test-cbc', 'test-ecg'],
     testNames: ['Blood Sugar Fasting', 'Complete Blood Count', '12-Lead ECG'],
     status: 'completed',
@@ -136,11 +137,11 @@ export const HISTORICAL_PATIENT_RECORDS: HistoricalPatientRecord[] = [
     name: 'Anita Rawat',
     age: 38,
     gender: 'Female',
-    contact: '+91 98734 99018',
+    contact: '+91 97734 99018',
     visitDate: '2026-08-28',
     chiefComplaint: 'Recurrent burning micturition, lower pelvic cramping',
-    prescribedDoctorName: 'Dr. Ananya Sen',
-    prescribedDoctorRoom: 'Chamber 204',
+    prescribedDoctorName: DEFAULT_ARCHIVE_DOCTOR_NAME,
+    prescribedDoctorRoom: DEFAULT_ARCHIVE_DOCTOR_ROOM,
     completedTests: ['test-urine', 'test-cbc'],
     testNames: ['Urinalysis Routine', 'Complete Blood Count'],
     status: 'completed',
@@ -152,11 +153,11 @@ export const HISTORICAL_PATIENT_RECORDS: HistoricalPatientRecord[] = [
     name: 'Deepak Joshi',
     age: 29,
     gender: 'Male',
-    contact: '+91 99991 10129',
+    contact: '+91 97991 10129',
     visitDate: '2026-08-30',
     chiefComplaint: 'Low back pain after heavy lifting in gym, radiating to left thigh',
-    prescribedDoctorName: 'Dr. Ananya Sen',
-    prescribedDoctorRoom: 'Chamber 204',
+    prescribedDoctorName: DEFAULT_ARCHIVE_DOCTOR_NAME,
+    prescribedDoctorRoom: DEFAULT_ARCHIVE_DOCTOR_ROOM,
     completedTests: ['test-xray-chest'],
     testNames: ['Digital Radiography PA'],
     status: 'completed',
@@ -168,11 +169,11 @@ export const HISTORICAL_PATIENT_RECORDS: HistoricalPatientRecord[] = [
     name: 'Meenakshi Iyer',
     age: 62,
     gender: 'Female',
-    contact: '+91 98114 21230',
+    contact: '+91 97114 21230',
     visitDate: '2026-09-02',
     chiefComplaint: 'Post-menopausal routine osteopenia evaluation, joint pain',
-    prescribedDoctorName: 'Dr. Ananya Sen',
-    prescribedDoctorRoom: 'Chamber 204',
+    prescribedDoctorName: DEFAULT_ARCHIVE_DOCTOR_NAME,
+    prescribedDoctorRoom: DEFAULT_ARCHIVE_DOCTOR_ROOM,
     completedTests: ['test-cbc', 'test-fbs'],
     testNames: ['Complete Blood Count', 'Blood Sugar Fasting'],
     status: 'completed',
@@ -180,8 +181,12 @@ export const HISTORICAL_PATIENT_RECORDS: HistoricalPatientRecord[] = [
   }
 ];
 
-// Helper to generate a total of 56 realistic clinical history patients
-const COMMON_NAMES = [
+const COMMON_NAMES: ReadonlyArray<{
+  name: string;
+  gender: 'Male' | 'Female';
+  age: number;
+  complaint: string;
+}> = [
   { name: 'Sanjay Kapoor', gender: 'Male', age: 49, complaint: 'Hypertension review, mild occipital morning headache' },
   { name: 'Kavita Menon', gender: 'Female', age: 34, complaint: 'Acute gastroenteritis, vomiting 2 episodes yesterday' },
   { name: 'Vikramaditya Rao', gender: 'Male', age: 56, complaint: 'Diabetes follow-up, tingling in both soles (neuropathy)' },
@@ -192,7 +197,7 @@ const COMMON_NAMES = [
   { name: 'Usha Kulkarni', gender: 'Female', age: 60, complaint: 'Bilateral ankle swelling after evening sitting' },
   { name: 'Praveen Chawla', gender: 'Male', age: 44, complaint: 'Executive health evaluation, family history of CAD' },
   { name: 'Bimla Rani', gender: 'Female', age: 72, complaint: 'Generalized body ache and chronic osteoarthritis' },
-  { name: 'Amitabh Sen', gender: 'Male', age: 51, complaint: 'Follow up for dyslipidemia, on Atorvastatin 20mg' },
+  { name: 'Amitabh Chatterjee', gender: 'Male', age: 51, complaint: 'Follow up for dyslipidemia, on Atorvastatin 20mg' },
   { name: 'Geeta Kashyap', gender: 'Female', age: 28, complaint: 'Iron deficiency anemia, paleness, mild exertional dyspnea' },
   { name: 'Manish Tyagi', gender: 'Male', age: 36, complaint: 'Acute low backache after scooter commute' },
   { name: 'Rashmi Nambiar', gender: 'Female', age: 43, complaint: 'Intermittent right flank discomfort, mild burning micturition' },
@@ -200,14 +205,14 @@ const COMMON_NAMES = [
   { name: 'Madhu Goel', gender: 'Female', age: 59, complaint: 'Type 2 Diabetes Mellitus with microalbuminuria check' },
   { name: 'Rohit Juneja', gender: 'Male', age: 26, complaint: 'High grade fever with chills 2 days (malaria/dengue screen)' },
   { name: 'Saroj Bala', gender: 'Female', age: 63, complaint: 'Chronic insomnia, hypertension monitoring' },
-  { name: 'Ashok Singhal', gender: 'Male', age: 57, complaint: 'Mild chest heaviness post heavy breakfast' },
+  { name: 'Ashok Bansal', gender: 'Male', age: 57, complaint: 'Mild chest heaviness post heavy breakfast' },
   { name: 'Neelam Aggarwal', gender: 'Female', age: 50, complaint: 'Post-menopausal syndrome, hot flashes, palpitations' },
   { name: 'Gaurav Vashisth', gender: 'Male', age: 33, complaint: 'Allergic rhinitis, sneezing fits in morning' },
   { name: 'Shobha Murthy', gender: 'Female', age: 70, complaint: 'Memory lapses, benign essential tremor evaluation' },
   { name: 'Kishore Kumar Das', gender: 'Male', age: 48, complaint: 'Elevated fasting blood sugar in home glucometer (168)' },
   { name: 'Ritu Trehan', gender: 'Female', age: 37, complaint: 'Migraine with aura, unilateral throbbing headache' },
   { name: 'Virendra Oberoi', gender: 'Male', age: 68, complaint: 'Prostatic enlargement symptoms, nocturia 4 times' },
-  { name: 'Pushpa Sundaram', gender: 'Female', age: 55, complaint: 'Cervical spondylosis, neck pain radiating to right hand' },
+  { name: 'Pushpa Krishnan', gender: 'Female', age: 55, complaint: 'Cervical spondylosis, neck pain radiating to right hand' },
   { name: 'Alok Dixit', gender: 'Male', age: 41, complaint: 'Fatty liver surveillance, elevated SGOT/SGPT on lab' },
   { name: 'Hemlata Pandey', gender: 'Female', age: 61, complaint: 'Osteoarthritis knee, advised intra-articular therapy' },
   { name: 'Tarun Mathur', gender: 'Male', age: 45, complaint: 'Dry hacking cough post flu for 4 weeks' },
@@ -230,29 +235,47 @@ const COMMON_NAMES = [
   { name: 'Harish Bajaj', gender: 'Male', age: 71, complaint: 'Benign prostatic hyperplasia annual monitoring' }
 ];
 
-// Combine to guarantee exactly 56 patient records
-COMMON_NAMES.forEach((item, index) => {
-  const serialNum = 11 + index;
-  const uhidStr = `QC-2026-80${serialNum < 10 ? '0' + serialNum : serialNum}`;
-  const day = (serialNum % 28) + 1;
-  const month = serialNum % 2 === 0 ? '09' : '10';
-  const dateStr = `2026-${month}-${day < 10 ? '0' + day : day}`;
-  const phone = `+91 ${98100 + serialNum} ${20000 + serialNum * 11}`;
+export const HISTORICAL_PATIENT_RECORDS: HistoricalPatientRecord[] = [
+  ...BASE_HISTORICAL_RECORDS,
+  ...COMMON_NAMES.map((item, index): HistoricalPatientRecord => {
+    const serialNum = 11 + index;
+    const uhidStr = `QC-2026-80${serialNum}`;
+    const day = (serialNum % 28) + 1;
+    const month = serialNum % 2 === 0 ? '09' : '10';
+    const dateStr = `2026-${month}-${day < 10 ? `0${day}` : day}`;
+    const phone = `+91 ${97200 + serialNum} ${30000 + serialNum * 17}`;
 
-  HISTORICAL_PATIENT_RECORDS.push({
-    id: `hist-${serialNum}`,
-    uhid: uhidStr,
-    name: item.name,
-    age: item.age,
-    gender: item.gender as 'Male' | 'Female' | 'Other',
-    contact: phone,
-    visitDate: dateStr,
-    chiefComplaint: item.complaint,
-    prescribedDoctorName: 'Dr. Ananya Sen',
-    prescribedDoctorRoom: 'Chamber 204',
-    completedTests: ['test-cbc', 'test-fbs'],
-    testNames: ['Complete Blood Count', 'Blood Sugar Fasting'],
-    status: 'completed',
-    diagnosisNotes: `Completed investigations. Clinical findings verified and discharge prescribed.`
-  });
-});
+    return {
+      id: `hist-${serialNum}`,
+      uhid: uhidStr,
+      name: item.name,
+      age: item.age,
+      gender: item.gender,
+      contact: phone,
+      visitDate: dateStr,
+      chiefComplaint: item.complaint,
+      prescribedDoctorName: DEFAULT_ARCHIVE_DOCTOR_NAME,
+      prescribedDoctorRoom: DEFAULT_ARCHIVE_DOCTOR_ROOM,
+      completedTests: ['test-cbc', 'test-fbs'],
+      testNames: ['Complete Blood Count', 'Blood Sugar Fasting'],
+      status: 'completed',
+      diagnosisNotes: 'Completed investigations. Clinical findings verified and discharge prescribed.'
+    };
+  })
+];
+
+/**
+ * Returns historical archive records bound dynamically to a given hospital's attending doctor/room.
+ */
+export function getHistoricalPatientRecordsForHospital(hospital?: {
+  doctorName?: string;
+  doctorRoom?: string;
+}): HistoricalPatientRecord[] {
+  const doctorName = hospital?.doctorName || DEFAULT_ARCHIVE_DOCTOR_NAME;
+  const doctorRoom = hospital?.doctorRoom || DEFAULT_ARCHIVE_DOCTOR_ROOM;
+  return HISTORICAL_PATIENT_RECORDS.map(record => ({
+    ...record,
+    prescribedDoctorName: doctorName,
+    prescribedDoctorRoom: doctorRoom
+  }));
+}

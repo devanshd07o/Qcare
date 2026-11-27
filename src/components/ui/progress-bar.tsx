@@ -50,7 +50,7 @@ export const ProgressBar = React.forwardRef<HTMLDivElement, ProgressBarProps>(
           />
         </div>
         {label ? (
-          <span className="shrink-0 whitespace-nowrap font-mono text-xs font-semibold text-[var(--text-primary)] tabular-nums">
+          <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-[var(--text-primary)] tabular-nums">
             {label}
           </span>
         ) : null}

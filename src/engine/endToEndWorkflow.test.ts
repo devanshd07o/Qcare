@@ -8,7 +8,12 @@ import {
   callPatientAction,
   completeTestAndUploadReportAction,
   verifyAndDischargePatientAction,
-  loginAsPatientWithSessionAction
+  loginAsPatientWithSessionAction,
+  loginDoctorAction,
+  loginLabTechAction,
+  loginPharmacistAction,
+  issuePrescriptionAction,
+  dispenseMedicationsAction
 } from '../store/useHospitalStore';
 
 describe('End-to-End Hospital OPD & Diagnostic Flow Integration', () => {
@@ -174,5 +179,86 @@ describe('End-to-End Hospital OPD & Diagnostic Flow Integration', () => {
     expect(patAfterPft.completedTests).toContain('test-spirometry');
     expect(patAfterPft.status).toBe('in_transit');
     expect(patAfterPft.doctorReviewStatus).toBe('awaiting_lab_reports');
+  });
+
+  it('completes 4-portal workflow: Doctor Register & Prescribe -> Lab Upload -> Doctor Rx & Discharge -> Pharmacist Dispense -> Patient Sees Dispensed Status', () => {
+    // 1. Doctor logs in & registers walk-in patient
+    expect(loginDoctorAction('Dr. Ananya Sen', undefined, 'Chamber 204', '', '', '1234', 'MAX-01').success).toBe(true);
+    const patient = registerPatientAction({
+      name: 'Karan Verma',
+      age: 46,
+      gender: 'Male',
+      contact: '9899112233',
+      chiefComplaint: 'Persistent cough and mild chest tightness'
+    });
+    prescribeTestsAction(patient.id, ['test-cbc', 'test-ecg'], 'priority');
+
+    const sAfterPrescribe = getHospitalState();
+    const cbcTokId = sAfterPrescribe.patients.find(p => p.id === patient.id)!.activeTokenIds['test-cbc'];
+    const ecgTokId = sAfterPrescribe.patients.find(p => p.id === patient.id)!.activeTokenIds['test-ecg'];
+
+    // 2. Lab Tech logs in & completes both investigations
+    expect(loginLabTechAction('Tech Arvind', 'dept-pathology', '1234', 'MAX-01').success).toBe(true);
+    callPatientAction(cbcTokId);
+    completeTestAndUploadReportAction(cbcTokId, { 'Hemoglobin (Hb)': '13.8', 'Total Leukocyte Count (TLC)': '9200' }, 'Within limits');
+    callPatientAction(ecgTokId);
+    completeTestAndUploadReportAction(ecgTokId, { 'Heart Rate': '78', 'Rhythm': 'Sinus Rhythm', 'PR Interval': '158' }, 'Normal tracing');
+
+    // 3. Doctor issues structured medication Rx and verifies/discharges patient
+    expect(loginDoctorAction('Dr. Ananya Sen', undefined, 'Chamber 204', '', '', '1234', 'MAX-01').success).toBe(true);
+    const issuedRx = issuePrescriptionAction(
+      patient.id,
+      [
+        {
+          drugName: 'Azithral',
+          genericName: 'Azithromycin',
+          dose: '500mg',
+          frequency: 'Once daily (OD)',
+          duration: '5 days',
+          route: 'Oral',
+          quantity: '5 tablets'
+        },
+        {
+          drugName: 'Montair / Singulair',
+          genericName: 'Montelukast',
+          dose: '10mg',
+          frequency: 'Once daily (OD)',
+          duration: '14 days',
+          route: 'Oral',
+          quantity: '14 tablets'
+        }
+      ],
+      'Steam inhalation twice daily. Follow up if fever persists.',
+      'Acute bronchitis'
+    );
+    expect(issuedRx).not.toBeNull();
+    verifyAndDischargePatientAction(patient.id, 'Labs normal. Digital Rx issued.');
+
+    // 4. Pharmacist logs in & dispenses all medications
+    expect(loginPharmacistAction('Pharm Neha', 'Max Central Pharmacy', '1234', 'MAX-01').success).toBe(true);
+    const dispenseRec = dispenseMedicationsAction(
+      issuedRx!.id,
+      issuedRx!.medications.map(m => m.id),
+      'Pharm Neha',
+      'Max Central Pharmacy',
+      'Counselled on completing 5-day Azithromycin course'
+    );
+    expect(dispenseRec).not.toBeNull();
+
+    // 5. Patient scans QR / opens Patient Portal and sees live dispensed prescription & records
+    expect(loginAsPatientWithSessionAction(patient.qrSessionId)).toBe(true);
+    const finalState = getHospitalState();
+    expect(finalState.activeRole).toBe('patient');
+    expect(finalState.selectedPatientId).toBe(patient.id);
+
+    const patientRx = finalState.prescriptions.filter(rx => rx.patientId === patient.id);
+    expect(patientRx).toHaveLength(1);
+    expect(patientRx[0].status).toBe('fully_dispensed');
+    expect(patientRx[0].medications.every(m => m.dispensed === true)).toBe(true);
+
+    const patientDispenseRecords = finalState.dispenseRecords.filter(r => r.patientId === patient.id);
+    expect(patientDispenseRecords).toHaveLength(1);
+    expect(patientDispenseRecords[0].pharmacistName).toBe('Pharm Neha');
+    expect(patientDispenseRecords[0].medicationsDispensed).toHaveLength(2);
   });
 });

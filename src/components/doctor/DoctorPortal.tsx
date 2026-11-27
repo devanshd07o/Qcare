@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { useHospitalStore, getHospitalState } from '../../store/useHospitalStore';
+import { useHospitalStore, getHospitalState, resolveIndianDoctorAvatar } from '../../store/useHospitalStore';
+import { REGISTERED_HOSPITALS } from '../../data/mockHospitalData';
 import { TRANSLATIONS } from '../../i18n/translations';
 import { PrintableSlip } from '../common/PrintableSlip';
 import { HISTORICAL_PATIENT_RECORDS, HistoricalPatientRecord } from '../../data/historicalPatientsData';
-import { Patient } from '../../types';
+import { MedicationItem, Patient } from '../../types';
 import { DoctorQueueWorkspace, QueueFilterMode, WorkspaceTabMode } from './DoctorQueueWorkspace';
 import { DoctorSidebar, DoctorPortalView } from './DoctorSidebar';
 import { DoctorDashboardView } from './DoctorDashboardView';
@@ -58,10 +59,10 @@ const DP_CSS = `
 @keyframes dpTrace{0%{stroke-dashoffset:100}55%{stroke-dashoffset:0}100%{stroke-dashoffset:-100}}
 
 /* ---------- form fields ---------- */
-.dp-root .dp-label{display:block;font-size:12px;font-weight:600;color:var(--text-secondary,#475569);margin-bottom:.375rem;letter-spacing:.01em;transition:color .15s ease}
+.dp-root .dp-label{display:block;font-size:12px;line-height:1.35;font-weight:600;color:var(--text-secondary,#475569);margin-bottom:.375rem;letter-spacing:.01em;transition:color .15s ease}
 .dp-root div:focus-within>.dp-label{color:var(--dp-teal)}
-.dp-root .dp-field{height:2.75rem;border-radius:12px;background:#FFFFFF;border:1.5px solid var(--border-input,#94A3A0);transition:border-color .15s ease,box-shadow .15s ease}
-.dp-root .dp-field.dp-sm{height:2.25rem;border-radius:10px}
+.dp-root .dp-field{height:2.75rem;line-height:1.5;border-radius:12px;background:#FFFFFF;border:1.5px solid var(--border-input,#94A3A0);transition:border-color .15s ease,box-shadow .15s ease}
+.dp-root .dp-field.dp-sm{height:2.25rem;line-height:1.4;border-radius:10px}
 .dp-root textarea.dp-field{height:auto;min-height:5.25rem;padding:.7rem .85rem;line-height:1.5;resize:vertical}
 .dp-root .dp-field:hover{border-color:var(--border-input-hover,#647470)}
 .dp-root .dp-field:focus,.dp-root .dp-field:focus-within{background:#fff;border-color:var(--dp-teal);box-shadow:0 0 0 3px var(--focus-ring,rgba(13,148,136,.22));outline:none}
@@ -124,9 +125,11 @@ export const DoctorPortal: React.FC = () => {
     setSelectedPatientId,
     activeLanguage,
     registerPatient,
+    updatePatientVisitAndTests,
     prescribeTests,
     verifyLabReport,
     verifyAndDischargePatient,
+    issuePrescription,
     loadDoctorDemoPatients,
     selectAndLoginPatient,
     prefilledWalkinData,
@@ -135,7 +138,9 @@ export const DoctorPortal: React.FC = () => {
     signOut,
     showToast,
     doctorView,
-    setDoctorView
+    setDoctorView,
+    doctorSidebarExpanded,
+    toggleDoctorSidebar
   } = useHospitalStore();
 
   void TRANSLATIONS[activeLanguage];
@@ -145,8 +150,16 @@ export const DoctorPortal: React.FC = () => {
   // ==========================================
   const mainViewMode = doctorView;
   const setMainViewMode = setDoctorView;
-  const [sidebarExpanded, setSidebarExpanded] = useState(false);
-  const [reportSelectedPatientId, setReportSelectedPatientId] = useState<string | null>(null);
+  const sidebarExpanded = doctorSidebarExpanded;
+  const [reportSelectedPatientId, setReportSelectedPatientId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const saved = sessionStorage.getItem('qcare_doctor_report_patient');
+      return saved || null;
+    } catch {
+      return null;
+    }
+  });
 
   // Live clock tick (refreshes every 30s so hourly load & pill ETAs stay dynamically synced)
   const [telemetryNow, setTelemetryNow] = useState<Date>(() => new Date());
@@ -160,6 +173,8 @@ export const DoctorPortal: React.FC = () => {
   // ==========================================
   // 1. WALK-IN CONSULTATION & REGISTRATION FORM STATE
   // ==========================================
+  const [editingPatientId, setEditingPatientId] = useState<string | null>(null);
+  const [isSubmittingWalkin, setIsSubmittingWalkin] = useState(false);
   const [patName, setPatName] = useState('');
   const [patAge, setPatAge] = useState('');
   const [patGender, setPatGender] = useState<'Male' | 'Female' | 'Other'>('Male');
@@ -168,6 +183,23 @@ export const DoctorPortal: React.FC = () => {
   const [patPriority, setPatPriority] = useState<'standard' | 'emergency'>('standard');
   const [walkinTestIds, setWalkinTestIds] = useState<string[]>([]);
   const [formError, setFormError] = useState('');
+
+  const editingPatient = useMemo(
+    () => (editingPatientId ? patients.find(p => p.id === editingPatientId) || null : null),
+    [editingPatientId, patients]
+  );
+
+  const resetWalkinForm = () => {
+    setEditingPatientId(null);
+    setPatName('');
+    setPatAge('');
+    setPatPhone('');
+    setPatComplaint('');
+    setPatPriority('standard');
+    setWalkinTestIds([]);
+    setFormError('');
+    setMobileStep(1);
+  };
 
   // Returning Patient Quick-Search
   const [returningSearchQuery, setReturningSearchQuery] = useState('');
@@ -241,6 +273,7 @@ export const DoctorPortal: React.FC = () => {
   // Listen to global prefilled patient data (e.g. from 56 patient search or AI Demo generator)
   useEffect(() => {
     if (!prefilledWalkinData) return;
+    setEditingPatientId(null);
     setPatName(prefilledWalkinData.name);
     setPatAge(prefilledWalkinData.age);
     setPatGender(prefilledWalkinData.gender);
@@ -264,10 +297,37 @@ export const DoctorPortal: React.FC = () => {
   // ==========================================
   // 3. TODAY'S ACTIVE QUEUE & REPORTS WORKSPACE STATE
   // ==========================================
-  const [queueFilter, setQueueFilter] = useState<QueueFilterMode>('all');
+  const [queueFilter, setQueueFilter] = useState<QueueFilterMode>(() => {
+    if (typeof window === 'undefined') return 'all';
+    try {
+      const saved = sessionStorage.getItem('qcare_doctor_queue_filter');
+      if (
+        saved === 'all' ||
+        saved === 'waiting' ||
+        saved === 'in_diagnostics' ||
+        saved === 'reports_ready' ||
+        saved === 'completed'
+      ) {
+        return saved;
+      }
+    } catch {}
+    return 'all';
+  });
   const [queueSearchQuery, setQueueSearchQuery] = useState('');
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTabMode>('prescribe');
   const [doctorConclusionNotes, setDoctorConclusionNotes] = useState('');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      sessionStorage.setItem('qcare_doctor_queue_filter', queueFilter);
+      if (reportSelectedPatientId) {
+        sessionStorage.setItem('qcare_doctor_report_patient', reportSelectedPatientId);
+      } else {
+        sessionStorage.removeItem('qcare_doctor_report_patient');
+      }
+    } catch {}
+  }, [queueFilter, reportSelectedPatientId]);
 
   // Selected patient in Live Queue mode
   const selectedPatient = useMemo(() => {
@@ -415,6 +475,7 @@ export const DoctorPortal: React.FC = () => {
   }, [returningSearchQuery, patients]);
 
   const handleSelectReturningPatient = (p: HistoricalPatientRecord | Patient) => {
+    setEditingPatientId(null);
     setPatName(p.name);
     setPatAge(String(p.age));
     setPatGender(p.gender as 'Male' | 'Female' | 'Other');
@@ -426,11 +487,13 @@ export const DoctorPortal: React.FC = () => {
   };
 
   const handleAutofillFromHistoricalModal = (item: HistoricalPatientRecord) => {
+    setEditingPatientId(null);
     setPatName(item.name);
     setPatAge(String(item.age));
     setPatGender(item.gender);
     setPatPhone(item.contact.replace(/\D/g, '').slice(-10));
     setPatComplaint(item.chiefComplaint);
+    setWalkinTestIds([]);
     setFormError('');
     setMainViewMode('walkin');
   };
@@ -455,6 +518,10 @@ export const DoctorPortal: React.FC = () => {
   }, [tests, departments, walkinCategoryFilter, walkinSearchFilter]);
 
   const toggleWalkinTest = (testId: string) => {
+    if (editingPatient?.completedTests.includes(testId) && walkinTestIds.includes(testId)) {
+      showToast('Completed diagnostic tests cannot be removed from an active visit.');
+      return;
+    }
     setWalkinTestIds(prev =>
       prev.includes(testId) ? prev.filter(id => id !== testId) : [...prev, testId]
     );
@@ -612,10 +679,11 @@ export const DoctorPortal: React.FC = () => {
   };
 
   // ==========================================
-  // SUBMIT WALK-IN REGISTRATION & GENERATE THERMAL PASS
+  // SUBMIT WALK-IN REGISTRATION / IN-PLACE EDIT & GENERATE THERMAL PASS
   // ==========================================
   const handleRegisterAndIssuePass = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingWalkin) return;
     setFormError('');
 
     const cleanPhone = patPhone.replace(/\D/g, '');
@@ -633,7 +701,33 @@ export const DoctorPortal: React.FC = () => {
       return;
     }
 
+    setIsSubmittingWalkin(true);
     try {
+      if (editingPatientId) {
+        const updatedPat = updatePatientVisitAndTests(editingPatientId, {
+          name: patName.trim(),
+          age: ageNum,
+          gender: patGender,
+          contact: cleanPhone,
+          chiefComplaint: patComplaint.trim() || 'General OPD consultation',
+          priority: patPriority,
+          testIds: walkinTestIds,
+          doctorPriority: patPriority === 'emergency' ? 'urgent' : 'normal'
+        });
+
+        const targetId = updatedPat?.id || editingPatientId;
+        const refreshedPat = getHospitalState().patients.find(p => p.id === targetId) || updatedPat;
+
+        resetWalkinForm();
+        setSelectedPatientId(targetId);
+        setReportSelectedPatientId(targetId);
+        if (refreshedPat) {
+          setSlipModalPatient(refreshedPat);
+        }
+        setMainViewMode('queue');
+        return;
+      }
+
       const newPat = registerPatient({
         name: patName.trim(),
         age: ageNum,
@@ -661,13 +755,7 @@ export const DoctorPortal: React.FC = () => {
         status: walkinTestIds.length > 0 ? 'in_transit' : 'registered'
       };
 
-      // Reset form
-      setPatName('');
-      setPatAge('');
-      setPatPhone('');
-      setPatComplaint('');
-      setPatPriority('standard');
-      setWalkinTestIds([]);
+      resetWalkinForm();
 
       // Immediately display thermal QR pass with refreshed tests and tokens
       setSelectedPatientId(newPat.id);
@@ -675,7 +763,21 @@ export const DoctorPortal: React.FC = () => {
       setSlipModalPatient(refreshedPat);
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : 'Registration failed. Please review input fields.');
+    } finally {
+      setIsSubmittingWalkin(false);
     }
+  };
+
+  const handleVerifyAndDischargeWithRx = (
+    patientId: string,
+    notes: string,
+    medications: MedicationItem[] = []
+  ) => {
+    if (medications.length > 0) {
+      issuePrescription(patientId, medications, notes);
+    }
+    verifyAndDischargePatient(patientId, notes);
+    setDoctorConclusionNotes('');
   };
 
   // ==========================================
@@ -801,9 +903,14 @@ export const DoctorPortal: React.FC = () => {
       ======================================================== */}
       <DoctorSidebar
         activeView={mainViewMode}
-        onSelectView={setMainViewMode}
+        onSelectView={view => {
+          if (view === 'walkin' || editingPatientId) {
+            resetWalkinForm();
+          }
+          setMainViewMode(view);
+        }}
         isExpanded={sidebarExpanded}
-        onToggleExpand={() => setSidebarExpanded(prev => !prev)}
+        onToggleExpand={toggleDoctorSidebar}
         queueCount={patients.length}
         reportsCount={hierarchicalReportPatients.length}
         unreadReportsCount={unreadReportPatientsCount}
@@ -813,9 +920,10 @@ export const DoctorPortal: React.FC = () => {
 
       <div
         className={`w-full min-w-0 transition-[padding-left] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-          sidebarExpanded ? 'md:pl-[228px]' : 'md:pl-[76px]'
+          sidebarExpanded ? 'md:pl-[224px]' : 'md:pl-[68px]'
         }`}
       >
+        <div className="p-4 sm:p-6">
         {/* ========================================================
             1. VIEW 0: CLINICAL DOCTOR DASHBOARD
         ======================================================== */}
@@ -824,9 +932,25 @@ export const DoctorPortal: React.FC = () => {
             doctorId={currentUser?.id || ''}
             doctorName={currentUser?.name || currentHospital.doctorName}
             doctorRoom={currentUser?.identifier || currentHospital.doctorRoom}
+            doctorDesignation={
+              currentUser?.designation ||
+              currentHospital.doctorDesignation ||
+              REGISTERED_HOSPITALS.find(h => h.id === currentHospital.id || h.code === currentHospital.code)?.doctorDesignation ||
+              'Senior Consultant · Internal Medicine, MD'
+            }
+            doctorAvatar={
+              currentUser?.avatar ||
+              currentHospital.doctorAvatar ||
+              resolveIndianDoctorAvatar(
+                currentUser?.name || currentHospital.doctorName,
+                currentUser?.gender || currentHospital.doctorGender
+              )
+            }
             patients={patients}
             recordsCount={HISTORICAL_PATIENT_RECORDS.length}
             reportPatients={hierarchicalReportPatients}
+            historicalRecords={HISTORICAL_PATIENT_RECORDS}
+            tests={tests}
             onSelectView={setMainViewMode}
             onOpenQueueWithFilter={(filter, patId) => {
               setQueueFilter(filter);
@@ -904,13 +1028,34 @@ export const DoctorPortal: React.FC = () => {
                   mobileStep === 1 ? 'block' : 'hidden lg:block'
                 }`}
               >
-                <div className="flex items-center gap-2.5 pb-3 border-b border-[var(--border-subtle)]">
-                  <div className="dp-ico">
-                    <UserPlus className="w-4 h-4 text-white" />
+                <div className="flex items-center justify-between gap-2.5 pb-3 border-b border-[var(--border-subtle)]">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="dp-ico">
+                      <UserPlus className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="min-w-0">
+                      <h2 className="text-base font-bold text-[var(--text-primary)] tracking-tight truncate">
+                        {editingPatientId ? 'Update Patient Tests' : 'New Patient'}
+                      </h2>
+                      {editingPatient && (
+                        <p className="text-[11px] text-[#087C80] font-medium tabular-nums truncate">
+                          Editing {editingPatient.opdTokenNumber} · {editingPatient.uhid}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <h2 className="text-base font-bold text-[var(--text-primary)] tracking-tight">
-                    New Patient
-                  </h2>
+                  {editingPatientId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetWalkinForm();
+                        setMainViewMode('queue');
+                      }}
+                      className="h-8 px-2.5 rounded-lg border border-[var(--border-default)] bg-white hover:bg-[var(--bg-surface-subtle)] text-[11.5px] font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer shrink-0"
+                    >
+                      Cancel
+                    </button>
+                  )}
                 </div>
 
                 {/* Returning Patient Search + Demo */}
@@ -927,7 +1072,7 @@ export const DoctorPortal: React.FC = () => {
                         }}
                         onFocus={() => setShowReturningDropdown(true)}
                         placeholder="Returning patient — name, UHID, phone"
-                        className="dp-field w-full h-10 pl-9 pr-7 rounded-xl text-sm sm:text-xs text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)]"
+                        className="dp-field w-full h-10 pl-9 pr-7 rounded-xl text-base sm:text-sm leading-[1.5] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)]"
                       />
                       {returningSearchQuery && (
                         <button
@@ -967,7 +1112,7 @@ export const DoctorPortal: React.FC = () => {
                             <div className="min-w-0">
                               <div className="font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
                                 <span>{hist.name}</span>
-                                <span className="font-mono text-[11px] text-[var(--text-secondary)]">({hist.uhid})</span>
+                                <span className="tabular-nums text-[11px] text-[var(--text-secondary)]">({hist.uhid})</span>
                               </div>
                               <p className="text-[11px] text-[var(--text-secondary)] mt-0.5 truncate">
                                 {hist.age}Y · {hist.gender} · {hist.contact} · Visited {hist.visitDate}
@@ -994,7 +1139,7 @@ export const DoctorPortal: React.FC = () => {
                       value={patName}
                       onChange={e => setPatName(e.target.value)}
                       placeholder="Patient full name"
-                      className="dp-field w-full h-10 pl-10 pr-3 rounded-xl text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)]"
+                      className="dp-field w-full h-10 pl-10 pr-3 rounded-xl text-base sm:text-sm leading-[1.5] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)]"
                     />
                   </div>
                 </div>
@@ -1015,7 +1160,7 @@ export const DoctorPortal: React.FC = () => {
                         value={patAge}
                         onChange={e => setPatAge(e.target.value)}
                         placeholder="Age"
-                        className="dp-field w-full h-10 pl-10 pr-3 rounded-xl text-sm text-[var(--text-primary)] tabular-nums"
+                        className="dp-field w-full h-10 pl-10 pr-3 rounded-xl text-base sm:text-sm leading-[1.5] text-[var(--text-primary)] tabular-nums"
                       />
                     </div>
                   </div>
@@ -1057,7 +1202,7 @@ export const DoctorPortal: React.FC = () => {
                     Mobile number <span className="text-rose-500">*</span>
                   </label>
                   <div className="dp-field flex rounded-xl overflow-hidden h-10">
-                    <span className="inline-flex items-center px-3 bg-[var(--bg-surface-subtle)] text-[var(--text-secondary)] font-semibold text-xs border-r border-[var(--border-subtle)] shrink-0 font-mono">
+                    <span className="inline-flex items-center px-3 bg-[var(--bg-surface-subtle)] text-[var(--text-secondary)] font-semibold text-xs border-r border-[var(--border-subtle)] shrink-0 tabular-nums">
                       +91
                     </span>
                     <div className="relative flex-1 flex items-center">
@@ -1069,7 +1214,7 @@ export const DoctorPortal: React.FC = () => {
                         value={patPhone}
                         onChange={e => setPatPhone(e.target.value.replace(/\D/g, ''))}
                         placeholder="98101 23456"
-                        className="w-full h-full pl-9 pr-3 text-sm text-[var(--text-primary)] bg-transparent outline-none font-mono tabular-nums"
+                        className="w-full h-full pl-9 pr-3 text-base sm:text-sm leading-[1.5] text-[var(--text-primary)] bg-transparent outline-none tabular-nums"
                       />
                     </div>
                   </div>
@@ -1152,7 +1297,7 @@ export const DoctorPortal: React.FC = () => {
                       value={patComplaint}
                       onChange={e => setPatComplaint(e.target.value)}
                       placeholder="Document symptoms (or type shorthand like 'fever' and click AI Assist)..."
-                      className="dp-field w-full p-2.5 rounded-xl text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)]"
+                      className="dp-field w-full p-2.5 rounded-xl text-base sm:text-sm leading-[1.5] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)]"
                     />
                   </div>
                 </div>
@@ -1322,7 +1467,7 @@ export const DoctorPortal: React.FC = () => {
                         placeholder="Search tests..."
                         value={walkinSearchFilter}
                         onChange={e => setWalkinSearchFilter(e.target.value)}
-                        className="dp-field dp-sm w-full h-9 pl-8 pr-6 text-base sm:text-xs rounded-xl text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)]"
+                        className="dp-field dp-sm w-full h-9 pl-8 pr-6 text-base sm:text-sm leading-[1.5] rounded-xl text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)]"
                       />
                       {walkinSearchFilter && (
                         <button
@@ -1395,7 +1540,7 @@ export const DoctorPortal: React.FC = () => {
 
                         <div className="flex items-center gap-2.5 shrink-0">
                           {liveEst && (
-                            <span className="inline-flex items-center gap-1.5 font-mono text-xs font-semibold text-[var(--text-secondary)] tabular-nums">
+                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--text-secondary)] tabular-nums">
                               <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotToneClass}`} />
                               <span>{liveEst.isUnavailable ? 'Closed' : `~${liveEst.estimatedTotalMinutes}m`}</span>
                             </span>
@@ -1423,7 +1568,7 @@ export const DoctorPortal: React.FC = () => {
                         </span>
                         <span
                           data-testid="qcare-total-minutes"
-                          className="font-mono text-lg font-bold text-[var(--text-primary)] tabular-nums tracking-tight leading-[1.1]"
+                          className="text-lg font-bold text-[var(--text-primary)] tabular-nums tracking-tight leading-[1.1]"
                         >
                           ~{walkinEstimate.totalEstimatedMinutes} min
                         </span>
@@ -1444,7 +1589,7 @@ export const DoctorPortal: React.FC = () => {
                         {walkinTestIds.length > 1 && (
                           <button
                             type="button"
-                            onClick={() => setWalkinTestIds([])}
+                            onClick={() => setWalkinTestIds(editingPatient?.completedTests || [])}
                             className="font-semibold text-[var(--text-secondary)] hover:text-[var(--danger)] transition-colors duration-150 cursor-pointer"
                           >
                             Clear
@@ -1532,7 +1677,8 @@ export const DoctorPortal: React.FC = () => {
                                 dominantBaseline="middle"
                                 fontSize="12"
                                 fontWeight="700"
-                                fontFamily="ui-monospace, monospace"
+                                fontFamily="var(--font-sans, 'Inter', sans-serif)"
+                                style={{ fontVariantNumeric: 'tabular-nums' }}
                                 fill="var(--text-primary)"
                               >
                                 ~{walkinEstimate.totalEstimatedMinutes}
@@ -1544,7 +1690,7 @@ export const DoctorPortal: React.FC = () => {
                                 dominantBaseline="middle"
                                 fontSize="8"
                                 fontWeight="500"
-                                fontFamily="system-ui, sans-serif"
+                                fontFamily="var(--font-sans, 'Inter', sans-serif)"
                                 fill="var(--text-secondary)"
                                 letterSpacing="0.04em"
                               >
@@ -1565,7 +1711,7 @@ export const DoctorPortal: React.FC = () => {
                                     className="w-2 h-2 rounded-sm shrink-0"
                                     style={{ backgroundColor: cssVar }}
                                   />
-                                  <span className="font-mono text-[10px] text-[var(--text-tertiary)] tabular-nums shrink-0">
+                                  <span className="text-[10px] text-[var(--text-tertiary)] tabular-nums shrink-0">
                                     {step.stepNumber}.
                                   </span>
                                   <span className="font-medium text-[var(--text-primary)] truncate leading-tight">
@@ -1573,7 +1719,7 @@ export const DoctorPortal: React.FC = () => {
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-1.5 shrink-0">
-                                  <span className="font-mono text-[11px] text-[var(--text-secondary)] tabular-nums">
+                                  <span className="text-[11px] text-[var(--text-secondary)] tabular-nums">
                                     ~{step.stepTotalMinutes}m
                                   </span>
                                   <button
@@ -1596,7 +1742,7 @@ export const DoctorPortal: React.FC = () => {
                 )}
 
                 {/* Bottom Action Bar */}
-                <div className="pt-3 border-t border-[var(--border-subtle)] flex items-center justify-between gap-4">
+                <div className="pt-3 border-t border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-3">
                   <div className="min-w-0">
                     <span className="text-[var(--text-primary)] font-bold text-xs block tabular-nums">
                       {walkinTestIds.length > 0
@@ -1604,19 +1750,36 @@ export const DoctorPortal: React.FC = () => {
                         : '0 tests selected'}
                     </span>
                     <span className="text-[var(--text-secondary)] text-[11px] block truncate">
-                      {walkinTestIds.length > 0
-                        ? `Optimal route ready (~${walkinEstimate.readyAtTime}) · Issue printable QR pass`
-                        : 'Select investigations or register directly'}
+                      {editingPatientId
+                        ? 'Update patient visit & investigations in-place (no duplicate record)'
+                        : walkinTestIds.length > 0
+                          ? `Optimal route ready (~${walkinEstimate.readyAtTime}) · Issue printable QR pass`
+                          : 'Select investigations or register directly'}
                     </span>
                   </div>
-                  <button
-                    type="submit"
-                    data-tooltip="Print thermal QR pass & route patient"
-                    className="dp-cta h-11 px-5 text-xs sm:text-sm font-semibold rounded-xl flex items-center justify-center gap-2 cursor-pointer shrink-0"
-                  >
-                    <Printer className="w-4 h-4" />
-                    <span>Register & Issue Pass</span>
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {editingPatientId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          resetWalkinForm();
+                          setMainViewMode('queue');
+                        }}
+                        className="h-11 px-4 rounded-xl border border-[var(--border-default)] bg-white hover:bg-[var(--bg-surface-subtle)] text-xs sm:text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={isSubmittingWalkin}
+                      data-tooltip={editingPatientId ? 'Save test changes & refresh pass' : 'Print thermal QR pass & route patient'}
+                      className="dp-cta h-11 px-5 text-xs sm:text-sm font-semibold rounded-xl flex items-center justify-center gap-2 cursor-pointer shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      <Printer className="w-4 h-4" />
+                      <span>{editingPatientId ? 'Update Patient Tests' : 'Register & Issue Pass'}</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1652,19 +1815,23 @@ export const DoctorPortal: React.FC = () => {
           onOpenSlip={p => setSlipModalPatient(p)}
           onOpenPatientView={id => selectAndLoginPatient(id)}
           onEditTests={p => {
+            setEditingPatientId(p.id);
             setPatName(p.name);
             setPatAge(String(p.age));
             setPatGender(p.gender);
             setPatPhone(p.contact.replace(/\D/g, '').slice(-10));
             setPatComplaint(p.chiefComplaint || '');
+            setPatPriority(p.priority === 'emergency' ? 'emergency' : 'standard');
             setWalkinTestIds(p.prescribedTests);
+            setFormError('');
+            setMobileStep(1);
             setMainViewMode('walkin');
           }}
-          onSwitchToWalkin={() => setMainViewMode('walkin')}
-          onVerifyAndDischarge={(id, notes) => {
-            verifyAndDischargePatient(id, notes);
-            setDoctorConclusionNotes('');
+          onSwitchToWalkin={() => {
+            resetWalkinForm();
+            setMainViewMode('walkin');
           }}
+          onVerifyAndDischarge={handleVerifyAndDischargeWithRx}
           onLoadDemoQueue={loadDoctorDemoPatients}
         />
       )}
@@ -1679,82 +1846,45 @@ export const DoctorPortal: React.FC = () => {
           selectedPatientId={reportSelectedPatientId}
           onSelectPatientId={setReportSelectedPatientId}
           onVerifySingleReport={(repId, notes) => verifyLabReport(repId, notes)}
-          onVerifyAndDischarge={(patId, notes) => verifyAndDischargePatient(patId, notes)}
-          onSwitchToWalkin={() => setMainViewMode('walkin')}
+          onVerifyAndDischarge={handleVerifyAndDischargeWithRx}
+          onSwitchToWalkin={() => {
+            resetWalkinForm();
+            setMainViewMode('walkin');
+          }}
         />
       )}
 
       {/* ========================================================
-          4. VIEW 3: OUTPATIENT RECORDS ARCHIVE (56 PATIENTS)
+          4. VIEW 3: OUTPATIENT RECORDS ARCHIVE (MINIMALIST TABLE)
       ======================================================== */}
       {mainViewMode === 'records' && (
-        <BlurFade duration={0.2} offset={4}>
-          <div className="glass-panel rounded-2xl overflow-hidden flex flex-col">
-            <div className="p-4 sm:p-5 border-b border-[var(--border-subtle)] bg-[var(--bg-surface-subtle)] flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="dp-ico">
-                  <FolderArchive className="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    <h2 className="font-bold text-base text-[var(--text-primary)] tracking-tight">
-                      Outpatient Records Archive
-                    </h2>
-                    <span className="font-mono text-xs text-[var(--text-tertiary)] tabular-nums">
-                      {HISTORICAL_PATIENT_RECORDS.length} records
-                    </span>
-                  </div>
-                  <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                    Verified outpatient records over the past 6 months · {currentHospital.name}
-                  </p>
-                </div>
-              </div>
-
-              <span className="text-xs font-medium text-[var(--text-secondary)] tabular-nums">
-                Showing {filteredHistoricalRecords.length} of {HISTORICAL_PATIENT_RECORDS.length}
-              </span>
-            </div>
-
-            <div className="p-4 border-b border-[var(--border-subtle)] bg-white flex flex-col md:flex-row md:items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                {[
-                  { id: 'all', label: `All (${HISTORICAL_PATIENT_RECORDS.length})` },
-                  { id: 'pathology', label: 'Pathology / CBC' },
-                  { id: 'biochemistry', label: 'Biochemistry / FBS' },
-                  { id: 'cardiology', label: 'Cardiology / ECG' },
-                  { id: 'radiology', label: 'Radiology / X-Ray' },
-                  { id: 'ultrasound', label: 'Ultrasound / USG' }
-                ].map(cat => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => setHistoricalCategoryFilter(cat.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
-                      historicalCategoryFilter === cat.id
-                        ? 'bg-[var(--accent-primary)] text-white'
-                        : 'border border-[var(--border-default)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)]'
-                    }`}
-                  >
-                    {cat.label}
-                  </button>
-                ))}
+        <BlurFade duration={0.18} offset={4}>
+          <div className="rounded-[10px] border border-[#E2E8F0] bg-white overflow-hidden flex flex-col">
+            <div className="px-5 py-4 border-b border-[#E2E8F0] flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-baseline gap-2.5">
+                <h2 className="text-[18px] font-semibold text-[#0F172A] tracking-[-0.015em]">
+                  Past records
+                </h2>
+                <span className="text-[12px] text-[#64748B] tabular-nums">
+                  {filteredHistoricalRecords.length} of {HISTORICAL_PATIENT_RECORDS.length}
+                </span>
               </div>
 
               <div className="relative w-full md:w-72">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Search className="w-4 h-4 text-[#64748B] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" strokeWidth={1.75} />
                 <input
                   type="text"
                   value={historicalSearch}
                   onChange={e => setHistoricalSearch(e.target.value)}
-                  placeholder="Search UHID, name, contact..."
-                  className="w-full h-9 pl-9 pr-7 text-xs rounded-xl border border-[var(--border-input)] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--focus-ring)] bg-white"
+                  placeholder="Search UHID, name, contact"
+                  className="w-full h-9 pl-9 pr-8 text-base sm:text-[13px] leading-[1.5] rounded-[8px] border border-[#CBD5E1] text-[#0F172A] placeholder:text-[#64748B] focus:outline-none focus:border-[#087C80] bg-white"
                 />
                 {historicalSearch && (
                   <button
                     type="button"
                     onClick={() => setHistoricalSearch('')}
                     aria-label="Clear archive search"
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-[#0F172A] cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -1762,56 +1892,89 @@ export const DoctorPortal: React.FC = () => {
               </div>
             </div>
 
-            <div className="dp-scroll max-h-[620px] overflow-y-auto p-3 sm:p-4 space-y-2.5">
+            <div className="px-5 py-2.5 border-b border-[#E2E8F0] flex flex-wrap items-center gap-1.5">
+              {[
+                { id: 'all', label: `All (${HISTORICAL_PATIENT_RECORDS.length})` },
+                { id: 'pathology', label: 'Pathology' },
+                { id: 'biochemistry', label: 'Biochemistry' },
+                { id: 'cardiology', label: 'Cardiology' },
+                { id: 'radiology', label: 'Radiology' },
+                { id: 'ultrasound', label: 'Ultrasound' }
+              ].map(cat => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setHistoricalCategoryFilter(cat.id)}
+                  className={`px-3 py-1.5 rounded-[6px] text-[12px] font-medium transition-colors duration-150 cursor-pointer ${
+                    historicalCategoryFilter === cat.id
+                      ? 'bg-[#087C80] text-white'
+                      : 'text-[#64748B] hover:text-[#0F172A] hover:bg-[#F8FAFC]'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="max-h-[600px] overflow-y-auto overscroll-contain">
               {filteredHistoricalRecords.length === 0 ? (
-                <div className="p-8 text-center text-[var(--text-secondary)]">
-                  <p className="text-xs">No historical records match your search criteria.</p>
+                <div className="p-8 text-center text-[#64748B]">
+                  <p className="text-[13px]">No matching records found.</p>
                 </div>
               ) : (
-                filteredHistoricalRecords.map(item => (
-                  <div
-                    key={item.id}
-                    className="p-3.5 rounded-xl border border-[var(--border-default)] bg-white hover:border-[var(--accent-primary)] transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
-                  >
-                    <div className="space-y-1.5 min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-xs font-bold text-[var(--text-primary)]">{item.uhid}</span>
-                        <span className="font-bold text-sm text-[var(--text-primary)]">{item.name}</span>
-                        <span className="text-[var(--text-secondary)]">({item.age}Y · {item.gender})</span>
-                        <span className="font-mono text-[var(--text-secondary)]">{item.contact}</span>
-                        <span className="text-[11px] font-semibold text-[var(--status-success)]">Completed</span>
-                      </div>
-                      <p className="text-[var(--text-secondary)] text-xs">
-                        <span className="font-semibold text-[var(--text-primary)]">Complaint:</span> {item.chiefComplaint}
-                      </p>
-                      <div className="flex items-center gap-1.5 flex-wrap text-[11px] text-[var(--text-secondary)]">
-                        <span>Investigations:</span>
-                        {item.testNames.map((tName, tIdx) => (
-                          <span key={tIdx} className="bg-[var(--bg-surface-subtle)] border border-[var(--border-subtle)] px-2 py-0.5 rounded-md text-[var(--text-primary)] font-medium">
-                            {tName}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0">
-                      <span className="text-[11px] font-mono text-[var(--text-tertiary)] tabular-nums">{item.visitDate}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleAutofillFromHistoricalModal(item)}
-                        className="h-8 px-3 bg-[var(--accent-subtle)] hover:bg-[#d4efe9] border border-[var(--status-success-border)] text-[var(--accent-primary)] text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <UserPlus className="w-3.5 h-3.5" />
-                        <span>Autofill walk-in</span>
-                      </button>
-                    </div>
-                  </div>
-                ))
+                <table className="w-full text-left border-separate border-spacing-0">
+                  <thead className="sticky top-0 z-10 bg-[#F8FAFC]">
+                    <tr>
+                      <th scope="col" className="px-5 py-2.5 text-[12px] font-medium text-[#64748B] border-b border-[#E2E8F0]">
+                        Patient
+                      </th>
+                      <th scope="col" className="px-4 py-2.5 text-[12px] font-medium text-[#64748B] hidden md:table-cell border-b border-[#E2E8F0]">
+                        Investigations
+                      </th>
+                      <th scope="col" className="px-4 py-2.5 text-[12px] font-medium text-[#64748B] hidden sm:table-cell border-b border-[#E2E8F0]">
+                        Visit date
+                      </th>
+                      <th scope="col" className="px-5 py-2.5 text-right text-[12px] font-medium text-[#64748B] border-b border-[#E2E8F0]">
+                        Action
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="[&_tr:not(:last-child)_td]:border-b [&_tr:not(:last-child)_td]:border-[#E2E8F0]">
+                    {filteredHistoricalRecords.map(item => (
+                      <tr key={item.id} className="hover:bg-[#F8FAFC] transition-colors duration-150">
+                        <td className="px-5 py-3 align-middle">
+                          <div className="text-[14px] font-medium text-[#0F172A]">
+                            {item.name}
+                          </div>
+                          <div className="text-[12px] text-[#64748B] mt-0.5 tabular-nums">
+                            {item.age} yrs · {item.gender} · {item.uhid}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 align-middle hidden md:table-cell text-[12.5px] text-[#475569]">
+                          {item.testNames.slice(0, 2).join(', ')}
+                        </td>
+                        <td className="px-4 py-3 align-middle hidden sm:table-cell text-[12px] text-[#64748B] tabular-nums whitespace-nowrap">
+                          {item.visitDate}
+                        </td>
+                        <td className="px-5 py-3 align-middle text-right whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => handleAutofillFromHistoricalModal(item)}
+                            className="text-[12.5px] font-medium text-[#087C80] hover:underline cursor-pointer"
+                          >
+                            Register visit
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
             </div>
           </div>
         </BlurFade>
       )}
+        </div>
       </div>
 
       {/* ========================================================
@@ -1853,7 +2016,7 @@ export const DoctorPortal: React.FC = () => {
           >
             <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-[var(--border-subtle)]">
               <span className="font-bold text-xs text-[var(--text-primary)] truncate">{hTest.name}</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--bg-surface-subtle)] text-[var(--text-secondary)] border border-[var(--border-default)] font-semibold shrink-0">
+              <span className="text-[10px] tabular-nums px-1.5 py-0.5 rounded bg-[var(--bg-surface-subtle)] text-[var(--text-secondary)] border border-[var(--border-default)] font-semibold shrink-0">
                 {hTest.code}
               </span>
             </div>
@@ -1864,14 +2027,14 @@ export const DoctorPortal: React.FC = () => {
                   <MapPin className="w-3 h-3 text-[var(--accent-primary)] shrink-0" />
                   <span className="truncate">{hDept?.location.room} · {hDept?.location.floor}</span>
                 </span>
-                <span className="inline-flex items-center gap-1 font-mono font-semibold text-[var(--status-success)] shrink-0 tabular-nums">
+                <span className="inline-flex items-center gap-1 font-semibold text-[var(--status-success)] shrink-0 tabular-nums">
                   <Clock className="w-3 h-3" />
                   <span>~{hEst ? hEst.estimatedTotalMinutes : hTest.averageDurationMinutes}m</span>
                 </span>
               </div>
 
               {hEst && (
-                <div className="px-2 py-1 rounded-lg bg-[var(--bg-surface-subtle)] border border-[var(--border-subtle)] text-[10px] font-mono text-[var(--text-primary)] flex items-center justify-between gap-2 tabular-nums">
+                <div className="px-2 py-1 rounded-lg bg-[var(--bg-surface-subtle)] border border-[var(--border-subtle)] text-[10px] text-[var(--text-primary)] flex items-center justify-between gap-2 tabular-nums">
                   <span>Lab avg {hEst.effectiveServiceMinutes}m + Q {hEst.queueWaitMinutes}m</span>
                   <span className="font-bold text-[var(--accent-primary)]">{hEst.throughputPerHour}/hr</span>
                 </div>

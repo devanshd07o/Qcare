@@ -334,11 +334,13 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
     setLanguage,
     loginDoctor,
     loginLabTech,
-    loginPatientLookup
+    loginPharmacist,
+    loginPatientLookup,
+    selectAndLoginPatient
   } = useHospitalStore();
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<'staff' | 'lab' | 'patient'>('staff');
+  const [activeTab, setActiveTab] = useState<'staff' | 'lab' | 'pharmacy' | 'patient'>('staff');
 
   // Staff Form State
   const [staffMobile, setStaffMobile] = useState('');
@@ -352,9 +354,16 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
   const [labPin, setLabPin] = useState(['', '', '', '']);
   const [labShowPin, setLabShowPin] = useState(false);
 
+  // Pharmacy Form State
+  const [pharmName, setPharmName] = useState('');
+  const [pharmacyStationName, setPharmacyStationName] = useState('');
+  const [pharmPin, setPharmPin] = useState(['', '', '', '']);
+  const [pharmShowPin, setPharmShowPin] = useState(false);
+
   // Patient Form State
   const [patientToken, setPatientToken] = useState('');
   const [patientMobile, setPatientMobile] = useState('');
+  const [patientMatches, setPatientMatches] = useState<Array<{ id: string; name: string; uhid: string; opdTokenNumber: string }>>([]);
 
   // Carousel & UI State
   const [activeSlide, setActiveSlide] = useState(0);
@@ -725,9 +734,15 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
       setLabStaffId('TECH-01');
       setLabBayId(departments[0]?.id || 'dept-pathology');
       setLabPin(['1', '2', '3', '4']);
+    } else if (activeTab === 'pharmacy') {
+      const hospShort = selectedHospital?.shortName || REGISTERED_HOSPITALS[0].shortName;
+      setPharmName('Meera Kapoor');
+      setPharmacyStationName(`${hospShort} Dispensary`);
+      setPharmPin(['1', '2', '3', '4']);
     } else if (activeTab === 'patient') {
       setPatientToken('QC-9411');
       setPatientMobile('9876543210');
+      setPatientMatches([]);
     }
   };
 
@@ -809,18 +824,69 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
     }, 200);
   };
 
+  // Pharmacy Submit
+  const handlePharmacySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (!selectedHospital) {
+      setError(
+        lang === 'hi'
+          ? 'कृपया आगे बढ़ने के लिए अपना अस्पताल चुनें या कोड (उदा. MAX-01) दर्ज करें।'
+          : 'Please select your hospital or enter a valid hospital code (e.g. MAX-01).'
+      );
+      return;
+    }
+
+    const joinedPin = pharmPin.join('');
+    if (joinedPin.length < 4) {
+      setError(lang === 'hi' ? 'कृपया 4-अंकों का पिन दर्ज करें।' : 'Please enter 4-digit PIN.');
+      return;
+    }
+
+    const targetPharmacist = pharmName.trim() || 'Duty Pharmacist';
+    const targetDispensary = pharmacyStationName.trim() || `${selectedHospital.shortName} Pharmacy`;
+    setLoading(true);
+
+    setTimeout(() => {
+      const res = loginPharmacist(targetPharmacist, targetDispensary, joinedPin, selectedHospital.id);
+      setLoading(false);
+      if (!res.success) {
+        setError(res.error || 'Authentication failed.');
+      }
+    }, 200);
+  };
+
   // Patient Submit
   const handlePatientSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    const query = patientToken.trim() || patientMobile.trim() || 'QC-9411';
+    setPatientMatches([]);
+    const query = patientToken.trim() || patientMobile.trim();
+    if (!query) {
+      setError(
+        lang === 'hi'
+          ? 'कृपया पर्ची टोकन नंबर, UHID या पंजीकृत मोबाइल दर्ज करें।'
+          : 'Please enter a valid Token, UHID, Name, or Mobile number.'
+      );
+      return;
+    }
 
     setLoading(true);
     setTimeout(() => {
       const res = loginPatientLookup(query);
       setLoading(false);
       if (!res.success) {
-        setError(res.error || 'Unable to load patient pass.');
+        setError(res.error || 'Patient record not found. Verify your Token, UHID, Name, or Mobile number.');
+      } else if (res.patients && res.patients.length > 1) {
+        setPatientMatches(
+          res.patients.map(p => ({
+            id: p.id,
+            name: p.name,
+            uhid: p.uhid,
+            opdTokenNumber: p.opdTokenNumber
+          }))
+        );
       }
     }, 200);
   };
@@ -1023,10 +1089,10 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
                       <div className="text-[11px] font-semibold text-teal-300 tracking-wider uppercase font-sans">
                         {CAROUSEL_SLIDES[activeSlide].step[lang]}
                       </div>
-                      <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight leading-snug font-sans">
+                      <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight leading-snug font-sans text-balance">
                         {CAROUSEL_SLIDES[activeSlide].title[lang]}
                       </h3>
-                      <p className="text-xs sm:text-sm text-slate-200 mt-1 max-w-lg leading-relaxed font-sans">
+                      <p className="text-xs sm:text-sm text-slate-200 mt-1 max-w-prose leading-relaxed font-sans">
                         {CAROUSEL_SLIDES[activeSlide].desc[lang]}
                       </p>
                     </div>
@@ -1058,7 +1124,7 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
             <div className="w-full max-w-[420px] mx-auto bg-white/95 backdrop-blur-sm border border-slate-200/90 rounded-2xl shadow-xl shadow-slate-200/40 p-5 sm:p-6 flex flex-col">
               
               {/* Tabs: Underline style */}
-              <div className="flex border-b border-slate-200 mb-3.5" role="tablist">
+              <div className="flex border-b border-slate-200 mb-3.5 overflow-x-auto no-scrollbar" role="tablist">
                 <button
                   type="button"
                   role="tab"
@@ -1067,13 +1133,13 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
                     setActiveTab('staff');
                     setError('');
                   }}
-                  className={`flex-1 pb-2.5 text-xs sm:text-sm font-semibold tracking-tight transition-all relative cursor-pointer ${
+                  className={`flex-1 pb-2.5 px-1 text-xs sm:text-[13px] font-semibold tracking-tight transition-colors duration-150 relative cursor-pointer whitespace-nowrap ${
                     activeTab === 'staff'
                       ? 'text-teal-800'
                       : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  {lang === 'hi' ? 'डॉक्टर / स्टाफ' : 'Doctor & Staff'}
+                  {lang === 'hi' ? 'डॉक्टर' : 'Doctor & Staff'}
                   {activeTab === 'staff' && (
                     <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-700 rounded-full" />
                   )}
@@ -1087,14 +1153,34 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
                     setActiveTab('lab');
                     setError('');
                   }}
-                  className={`flex-1 pb-2.5 text-xs sm:text-sm font-semibold tracking-tight transition-all relative cursor-pointer ${
+                  className={`flex-1 pb-2.5 px-1 text-xs sm:text-[13px] font-semibold tracking-tight transition-colors duration-150 relative cursor-pointer whitespace-nowrap ${
                     activeTab === 'lab'
                       ? 'text-teal-800'
                       : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  {lang === 'hi' ? 'लैब टेक्नीशियन' : 'Lab Tech'}
+                  {lang === 'hi' ? 'लैब' : 'Lab Tech'}
                   {activeTab === 'lab' && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-700 rounded-full" />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === 'pharmacy'}
+                  onClick={() => {
+                    setActiveTab('pharmacy');
+                    setError('');
+                  }}
+                  className={`flex-1 pb-2.5 px-1 text-xs sm:text-[13px] font-semibold tracking-tight transition-colors duration-150 relative cursor-pointer whitespace-nowrap ${
+                    activeTab === 'pharmacy'
+                      ? 'text-teal-800'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  {lang === 'hi' ? 'फार्मेसी' : 'Pharmacy'}
+                  {activeTab === 'pharmacy' && (
                     <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-700 rounded-full" />
                   )}
                 </button>
@@ -1106,8 +1192,9 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
                   onClick={() => {
                     setActiveTab('patient');
                     setError('');
+                    setPatientMatches([]);
                   }}
-                  className={`flex-1 pb-2.5 text-xs sm:text-sm font-semibold tracking-tight transition-all relative cursor-pointer ${
+                  className={`flex-1 pb-2.5 px-1 text-xs sm:text-[13px] font-semibold tracking-tight transition-colors duration-150 relative cursor-pointer whitespace-nowrap ${
                     activeTab === 'patient'
                       ? 'text-teal-800'
                       : 'text-slate-500 hover:text-slate-800'
@@ -1122,14 +1209,16 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
 
               {/* Title Header */}
               <div className="mb-3">
-                <h2 className="text-xl font-bold text-slate-900 tracking-tight">
+                <h2 className="text-xl font-bold text-slate-900 tracking-tight text-balance leading-tight">
                   {activeTab === 'staff' && (lang === 'hi' ? 'साइन इन करें' : 'Sign in')}
                   {activeTab === 'lab' && (lang === 'hi' ? 'लैब स्टेशन खोलें' : 'Open lab station')}
+                  {activeTab === 'pharmacy' && (lang === 'hi' ? 'फार्मेसी काउंटर खोलें' : 'Open pharmacy desk')}
                   {activeTab === 'patient' && (lang === 'hi' ? 'अपनी जांच ट्रैक करें' : 'Track your tests')}
                 </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <p className="text-xs text-slate-500 mt-0.5 max-w-prose">
                   {activeTab === 'staff' && (lang === 'hi' ? 'ड्यूटी डॉक्टर एवं ओपीडी सहायक' : 'Duty doctor & clinical assistant')}
                   {activeTab === 'lab' && (lang === 'hi' ? 'डायग्नोस्टिक काउंटर कंसोल' : 'Diagnostic counter technician console')}
+                  {activeTab === 'pharmacy' && (lang === 'hi' ? 'डिजिटल पर्ची सत्यापन व दवा वितरण' : 'Digital prescription verification & dispensing')}
                   {activeTab === 'patient' && (lang === 'hi' ? 'लाइव डिजिटल बोर्डिंग पास' : 'Real-time diagnostic boarding pass')}
                 </p>
               </div>
@@ -1144,7 +1233,7 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
               {/* ==========================================
                   HOSPITAL / CENTER SELECTION (Hybrid: Dropdown + Auto-Detect Code)
               ========================================== */}
-              {(activeTab === 'staff' || activeTab === 'lab') && (
+              {(activeTab === 'staff' || activeTab === 'lab' || activeTab === 'pharmacy') && (
                 <div className="mb-3 relative" ref={hospitalMenuRef}>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
@@ -1177,7 +1266,7 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
                         <div className="flex items-center gap-2 min-w-0 pr-1">
                           {selectedHospital ? (
                             <>
-                              <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-teal-700 text-white text-[10px] font-mono font-bold">
+                              <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-teal-700 text-white text-[10px] tabular-nums font-bold">
                                 {selectedHospital.code}
                               </span>
                               <div className="truncate">
@@ -1228,7 +1317,7 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
                         onChange={e => handleHospitalCodeChange(e.target.value)}
                         placeholder="MAX-01"
                         title={lang === 'hi' ? 'अस्पताल कोड लिखें (उदा. MAX-01)' : 'Type hospital code (e.g. MAX-01)'}
-                        className={`w-full h-11 px-2.5 text-center text-xs font-mono font-bold uppercase rounded-xl border bg-white shadow-xs outline-none transition-all ${
+                        className={`w-full h-11 px-2.5 text-center text-base md:text-xs tabular-nums font-bold uppercase rounded-xl border bg-white shadow-xs outline-none transition-colors duration-150 ${
                           selectedHospital
                             ? 'border-teal-600 bg-teal-50/20 text-teal-900 font-bold focus:ring-2 focus:ring-teal-500/20'
                             : 'border-slate-300 text-slate-800 placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-500/20'
@@ -1251,7 +1340,7 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
                             value={hospitalSearchQuery}
                             onChange={e => setHospitalSearchQuery(e.target.value)}
                             placeholder={lang === 'hi' ? 'अस्पताल या कोड खोजें (उदा. MAX-01)...' : 'Search hospital or code (e.g. MAX-01)...'}
-                            className="w-full text-xs bg-transparent outline-none text-slate-900 placeholder:text-slate-400"
+                            className="w-full text-base md:text-xs bg-transparent outline-none text-slate-900 placeholder:text-slate-400"
                           />
                           {hospitalSearchQuery && (
                             <button
@@ -1298,7 +1387,7 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
 
                                 <div className="flex items-center gap-1.5 shrink-0 ml-1">
                                   <span
-                                    className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold ${
+                                    className={`px-1.5 py-0.5 rounded-md text-[10px] tabular-nums font-bold ${
                                       isSelected
                                         ? 'bg-teal-700 text-white'
                                         : 'bg-slate-100 text-slate-700 border border-slate-200/80'
@@ -1335,7 +1424,7 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
                         value={staffMobile}
                         onChange={e => setStaffMobile(e.target.value.replace(/\D/g, ''))}
                         placeholder="98100 11001"
-                        className="w-full h-10 px-3 text-sm text-slate-900 bg-white outline-none font-medium"
+                        className="w-full h-10 px-3 text-base md:text-sm tabular-nums text-slate-900 bg-white outline-none font-medium"
                       />
                     </div>
                   </div>
@@ -1406,7 +1495,7 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
                       value={labStaffId}
                       onChange={e => setLabStaffId(e.target.value)}
                       placeholder="TECH-01"
-                      className="w-full h-11 px-3.5 rounded-xl border border-slate-300 focus:border-teal-600 focus:ring-2 focus:ring-teal-500/20 text-sm text-slate-900 bg-white outline-none shadow-xs font-medium"
+                      className="w-full h-11 px-3.5 rounded-xl border border-slate-300 focus:border-teal-600 focus:ring-2 focus:ring-teal-500/20 text-base md:text-sm text-slate-900 bg-white outline-none shadow-xs font-medium"
                     />
                   </div>
 
@@ -1445,6 +1534,70 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
                 </form>
               )}
 
+              {/* Form Content: Pharmacy */}
+              {activeTab === 'pharmacy' && (
+                <form onSubmit={handlePharmacySubmit} className="space-y-3">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-1.5">
+                      {lang === 'hi' ? 'फार्मासिस्ट नाम' : 'Pharmacist Name'}
+                    </label>
+                    <input
+                      type="text"
+                      value={pharmName}
+                      onChange={e => setPharmName(e.target.value)}
+                      placeholder="Meera Kapoor"
+                      className="w-full h-11 px-3.5 rounded-xl border border-slate-300 focus:border-teal-600 focus:ring-2 focus:ring-teal-500/20 text-base md:text-sm text-slate-900 bg-white outline-none shadow-xs font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-1.5">
+                      {lang === 'hi' ? 'डिस्पेंसरी / फार्मेसी काउंटर' : 'Dispensary / Pharmacy Counter'}
+                    </label>
+                    <input
+                      type="text"
+                      value={pharmacyStationName}
+                      onChange={e => setPharmacyStationName(e.target.value)}
+                      placeholder={selectedHospital ? `${selectedHospital.shortName} Dispensary` : 'Central Dispensary'}
+                      className="w-full h-11 px-3.5 rounded-xl border border-slate-300 focus:border-teal-600 focus:ring-2 focus:ring-teal-500/20 text-base md:text-sm text-slate-900 bg-white outline-none shadow-xs font-medium"
+                    />
+                  </div>
+
+                  <PinInput
+                    pin={pharmPin}
+                    onChange={setPharmPin}
+                    showPin={pharmShowPin}
+                    onToggleShow={() => setPharmShowPin(prev => !prev)}
+                    disabled={loading}
+                    lang={lang}
+                    autoFocusFirst={false}
+                  />
+
+                  <div className="flex items-center justify-end pt-1">
+                    <button
+                      type="button"
+                      onClick={handleDemoFill}
+                      className="text-xs font-medium text-teal-700 hover:text-teal-900 cursor-pointer flex items-center gap-1"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>{lang === 'hi' ? 'डेमो भरें' : 'Demo fill'}</span>
+                    </button>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full h-11 mt-2 bg-teal-700 hover:bg-teal-800 active:bg-teal-900 text-white font-semibold text-sm rounded-xl transition-colors duration-150 shadow-md shadow-teal-900/10 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60"
+                  >
+                    {loading ? (
+                      <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <span>{lang === 'hi' ? 'फार्मेसी खोलें' : 'Open Dispensary'}</span>
+                    )}
+                  </button>
+                </form>
+              )}
+
               {/* Form Content: Patient */}
               {activeTab === 'patient' && (
                 <form onSubmit={handlePatientSubmit} className="space-y-3">
@@ -1457,7 +1610,7 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
                       value={patientToken}
                       onChange={e => setPatientToken(e.target.value.toUpperCase())}
                       placeholder="QC-9411"
-                      className="w-full h-10 px-3.5 rounded-xl border border-slate-300 focus:border-teal-600 focus:ring-2 focus:ring-teal-500/20 text-sm text-slate-900 bg-white outline-none shadow-xs font-medium uppercase"
+                      className="w-full h-10 px-3.5 rounded-xl border border-slate-300 focus:border-teal-600 focus:ring-2 focus:ring-teal-500/20 text-base md:text-sm tabular-nums text-slate-900 bg-white outline-none shadow-xs font-medium uppercase"
                     />
                   </div>
 
@@ -1475,10 +1628,31 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
                         value={patientMobile}
                         onChange={e => setPatientMobile(e.target.value.replace(/\D/g, ''))}
                         placeholder="98765 43210"
-                        className="w-full h-10 px-3 text-sm text-slate-900 bg-white outline-none font-medium"
+                        className="w-full h-10 px-3 text-base md:text-sm tabular-nums text-slate-900 bg-white outline-none font-medium"
                       />
                     </div>
                   </div>
+
+                  {patientMatches.length > 1 && (
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                      <p className="text-[11px] font-semibold text-slate-600">
+                        Select your profile ({patientMatches.length} matches):
+                      </p>
+                      <div className="space-y-1 max-h-32 overflow-y-auto">
+                        {patientMatches.map(m => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => selectAndLoginPatient(m.id)}
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-white hover:bg-teal-50 border border-slate-200 text-left text-xs font-semibold text-slate-800 flex items-center justify-between cursor-pointer"
+                          >
+                            <span>{m.name}</span>
+                            <span className="text-[11px] text-teal-700 tabular-nums">{m.uhid} · {m.opdTokenNumber}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-end pt-0.5">
                     <button
@@ -1494,7 +1668,7 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full h-10 mt-1 bg-teal-700 hover:bg-teal-800 active:bg-teal-900 text-white font-semibold text-sm rounded-xl transition-all shadow-md shadow-teal-900/10 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60"
+                    className="w-full h-10 mt-1 bg-teal-700 hover:bg-teal-800 active:bg-teal-900 text-white font-semibold text-sm rounded-xl transition-colors duration-150 shadow-md shadow-teal-900/10 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60"
                   >
                     {loading ? (
                       <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -1670,7 +1844,7 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5">
-                    <h3 className="font-bold text-sm leading-tight font-['Comfortaa',sans-serif]">Qbie</h3>
+                    <h3 className="font-bold text-sm leading-tight font-sans">Qbie</h3>
                     <span className="text-[10px] bg-emerald-400 text-slate-950 font-bold px-1.5 py-0.2 rounded-full">
                       Guide
                     </span>
@@ -1786,7 +1960,7 @@ export const AuthScreen: React.FC<{ customImage?: string }> = ({ customImage }) 
                 value={qbieInputValue}
                 onChange={e => setQbieInputValue(e.target.value)}
                 placeholder={lang === 'hi' ? 'सवाल पूछें (उदा. खाली पेट नियम)...' : 'Ask a question (e.g. fasting rules)...'}
-                className="flex-1 h-9 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-teal-600 focus:bg-white text-slate-900"
+                className="flex-1 h-9 px-3 text-base md:text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-teal-600 focus:bg-white text-slate-900"
               />
               <button
                 type="submit"

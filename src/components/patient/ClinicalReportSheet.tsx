@@ -7,6 +7,7 @@ import {
   ArrowLeft 
 } from 'lucide-react';
 import { ClinicalReport } from '../../types';
+import { useHospitalStore } from '../../store/useHospitalStore';
 
 interface ClinicalReportSheetProps {
   reports: ClinicalReport[];
@@ -21,6 +22,8 @@ export const ClinicalReportSheet: React.FC<ClinicalReportSheetProps> = ({
   patientName,
   onBack
 }) => {
+  const { currentHospital } = useHospitalStore();
+
   const handlePrint = () => {
     window.print();
   };
@@ -29,7 +32,7 @@ export const ClinicalReportSheet: React.FC<ClinicalReportSheetProps> = ({
     if (reports.length === 0) return;
     const content = reports.map(r => `
 ======================================================================
-CITYCARE GENERAL HOSPITAL & RESEARCH INSTITUTE
+${currentHospital.name.toUpperCase()}
 DIAGNOSTIC TEST REPORT
 ======================================================================
 REPORT ID      : ${r.id}
@@ -148,8 +151,8 @@ Digital Sign: ${r.doctorSignature || 'Awaiting Consulting Medical Officer'}
                 />
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-bold text-base sm:text-lg text-slate-900 tracking-tight">
-                      CityCare General Hospital
+                    <h3 className="font-bold text-base sm:text-lg text-slate-900 tracking-tight text-balance leading-tight">
+                      {currentHospital.name}
                     </h3>
                     <span className="text-[10px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200">
                       Accredited Lab
@@ -183,15 +186,15 @@ Digital Sign: ${r.doctorSignature || 'Awaiting Consulting Medical Officer'}
               </div>
               <div>
                 <span className="text-slate-400 block text-[10px] font-semibold">UHID</span>
-                <strong className="text-blue-700">{report.patientUhid}</strong>
+                <strong className="text-blue-700 tabular-nums">{report.patientUhid}</strong>
               </div>
               <div>
                 <span className="text-slate-400 block text-[10px] font-semibold">REPORT ID</span>
-                <strong className="text-slate-800">{report.id}</strong>
+                <strong className="text-slate-800 tabular-nums">{report.id}</strong>
               </div>
               <div>
                 <span className="text-slate-400 block text-[10px] font-semibold">DATE & TIME</span>
-                <strong className="text-slate-800">{report.timestamp}</strong>
+                <strong className="text-slate-800 tabular-nums">{report.timestamp}</strong>
               </div>
             </div>
 
@@ -286,7 +289,7 @@ Digital Sign: ${r.doctorSignature || 'Awaiting Consulting Medical Officer'}
 
                         {/* Status Flag Badge & Numeric readout */}
                         <div className="md:w-1/4 text-left md:text-right flex md:flex-col items-center md:items-end justify-between">
-                          <div className="text-base font-bold text-slate-900">
+                          <div className="text-base font-bold text-slate-900 tabular-nums">
                             {metric.value} <span className="text-xs font-normal text-slate-500">{metric.unit}</span>
                           </div>
                           <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
@@ -321,7 +324,7 @@ Digital Sign: ${r.doctorSignature || 'Awaiting Consulting Medical Officer'}
                     ✓
                   </div>
                   <div className="text-xs">
-                    <div className="font-bold text-slate-900">{report.doctorSignature || 'Dr. Sarah Jenkins, MD'}</div>
+                    <div className="font-bold text-slate-900">{report.doctorSignature || currentHospital.doctorName || 'Attending Physician'}</div>
                     <div className="text-[10px] text-slate-500">Consulting Physician</div>
                   </div>
                 </div>

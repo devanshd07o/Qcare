@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Seeding QCare database...');
 
-  // ── Create demo hospitals
+  // ── Create demo & MAX-01 hospitals
   const hospitals = await Promise.all([
     prisma.hospital.upsert({
       where: { code: 'AIIMS' },
@@ -56,9 +56,26 @@ async function main() {
         website: 'https://qcare.health',
       },
     }),
+    prisma.hospital.upsert({
+      where: { code: 'MAX-01' },
+      update: {},
+      create: {
+        name: 'Max Super Speciality Hospital, Saket',
+        code: 'MAX-01',
+        shortName: 'Max Saket',
+        tagline: 'Tertiary Care & Smart Diagnostic Network',
+        address: '1-2, Press Enclave Marg, Saket, New Delhi, Delhi 110017',
+        city: 'New Delhi',
+        contactNumber: '+91 11 2651 5050',
+        helpdeskPhone: '+91 11 2651 5050',
+        opdTimings: 'Mon–Sat, 08:30 AM – 04:30 PM',
+        website: 'https://www.maxhealthcare.in/hospital-network/max-super-speciality-hospital-saket',
+      },
+    }),
   ]);
 
   const demoHospital = hospitals[2]!;
+  const maxHospital = hospitals[3]!;
   console.log(`✅ Hospitals: ${hospitals.map(h => h.code).join(', ')}`);
 
   // ── Create departments for DEMO hospital
@@ -80,10 +97,34 @@ async function main() {
       })
     )
   );
-  console.log(`✅ Departments: ${departments.length} created`);
+  console.log(`✅ DEMO Departments: ${departments.length} created`);
 
-  // ── Create counters
+  // ── Create departments for MAX-01 hospital (matching frontend MAX-01 layout)
+  const maxDeptData = [
+    { code: 'BLD', name: 'Phlebotomy & Blood Lab', category: 'pathology', wing: 'East Wing', floor: 'Ground Floor', room: 'Room 12', accentColor: '#DC2626', iconName: 'Droplet', description: 'Blood sample collection, CBC, ESR, routine microscopy' },
+    { code: 'BIO', name: 'Biochemistry & Metabolic Lab', category: 'biochemistry', wing: 'East Wing', floor: 'Ground Floor', room: 'Room 14', accentColor: '#D97706', iconName: 'FlaskConical', description: 'Fasting glucose, HbA1c, Lipid profile, renal panel' },
+    { code: 'ECG', name: 'Cardiology Diagnostic Suite', category: 'cardiology', wing: 'Heart Institute Wing', floor: '1st Floor', room: 'Room 104', accentColor: '#2563EB', iconName: 'Activity', description: '12-lead digital ECG, cardiac rhythm evaluation' },
+    { code: 'RAD', name: 'Radiology & Digital Imaging', category: 'radiology', wing: 'Imaging Block', floor: 'Basement 1', room: 'Room B-08', accentColor: '#7C3AED', iconName: 'ScanLine', description: 'Low-dose digital X-Ray PA/Lateral views' },
+    { code: 'USG', name: 'Ultrasonography & Doppler Suite', category: 'ultrasound', wing: 'Sonography Wing', floor: 'Ground Floor', room: 'Room 10', accentColor: '#0D9488', iconName: 'Waves', description: 'Whole abdomen, pelvic, and Doppler sonography' },
+  ];
+
+  const maxDepartments = await Promise.all(
+    maxDeptData.map((d) =>
+      prisma.department.upsert({
+        where: { hospitalId_code: { hospitalId: maxHospital.id, code: d.code } },
+        update: {},
+        create: { hospitalId: maxHospital.id, ...d },
+      })
+    )
+  );
+  console.log(`✅ MAX-01 Departments: ${maxDepartments.length} created`);
+
+  // ── Create counters for DEMO & MAX-01
   const pathDept = departments.find(d => d.code === 'PATH')!;
+  const maxPhlebDept = maxDepartments.find(d => d.code === 'BLD')!;
+  const maxBioDept = maxDepartments.find(d => d.code === 'BIO')!;
+  const maxCardioDept = maxDepartments.find(d => d.code === 'ECG')!;
+
   await Promise.all([
     prisma.counter.upsert({
       where: { hospitalId_code: { hospitalId: demoHospital.id, code: 'PATH-A' } },
@@ -95,10 +136,25 @@ async function main() {
       update: {},
       create: { hospitalId: demoHospital.id, departmentId: pathDept.id, code: 'PATH-B', name: 'Blood Collection B', roomNo: '101-B', technicianName: 'Priya Sharma', status: 'active', averageServiceMinutes: 8 },
     }),
+    prisma.counter.upsert({
+      where: { hospitalId_code: { hospitalId: maxHospital.id, code: 'B-01' } },
+      update: {},
+      create: { hospitalId: maxHospital.id, departmentId: maxPhlebDept.id, code: 'B-01', name: 'Phlebotomy Bay Alpha', roomNo: 'Room 12', technicianName: 'Sunil Kumar', status: 'active', averageServiceMinutes: 6 },
+    }),
+    prisma.counter.upsert({
+      where: { hospitalId_code: { hospitalId: maxHospital.id, code: 'BIO-01' } },
+      update: {},
+      create: { hospitalId: maxHospital.id, departmentId: maxBioDept.id, code: 'BIO-01', name: 'Biochemistry Counter 1', roomNo: 'Room 14', technicianName: 'Anita Sen', status: 'active', averageServiceMinutes: 6 },
+    }),
+    prisma.counter.upsert({
+      where: { hospitalId_code: { hospitalId: maxHospital.id, code: 'E-01' } },
+      update: {},
+      create: { hospitalId: maxHospital.id, departmentId: maxCardioDept.id, code: 'E-01', name: 'Cardiac Rhythm Station 1', roomNo: 'Room 104', technicianName: 'Vikram Das', status: 'active', averageServiceMinutes: 5 },
+    }),
   ]);
   console.log('✅ Counters created');
 
-  // ── Create staff users
+  // ── Create staff users (DEMO + MAX-01)
   const passwordHash = await bcrypt.hash('QCare@123', 12);
 
   const staffUsers = await Promise.all([
@@ -156,11 +212,54 @@ async function main() {
         identifier: 'ADMIN-001',
       },
     }),
+    prisma.user.upsert({
+      where: { email: 'doctor@max01.qcare' },
+      update: {},
+      create: {
+        hospitalId: maxHospital.id,
+        role: 'doctor',
+        name: 'Dr. Ananya Sen',
+        email: 'doctor@max01.qcare',
+        passwordHash,
+        identifier: 'Chamber 204',
+        speciality: 'Senior Consultant · Internal Medicine, MD',
+        gender: 'Female',
+        avatar: '/doctors/doctor_female_1.jpg',
+      },
+    }),
+    prisma.user.upsert({
+      where: { email: 'lab@max01.qcare' },
+      update: {},
+      create: {
+        hospitalId: maxHospital.id,
+        role: 'lab_tech',
+        name: 'Sunil Kumar',
+        email: 'lab@max01.qcare',
+        passwordHash,
+        identifier: 'LAB-MAX-01',
+        speciality: 'Phlebotomy & Blood Lab',
+        gender: 'Male',
+      },
+    }),
+    prisma.user.upsert({
+      where: { email: 'pharmacist@max01.qcare' },
+      update: {},
+      create: {
+        hospitalId: maxHospital.id,
+        role: 'pharmacist',
+        name: 'Meera Kapoor',
+        email: 'pharmacist@max01.qcare',
+        passwordHash,
+        identifier: 'PHARM-MAX-01',
+        speciality: 'Clinical Pharmacy',
+        gender: 'Female',
+      },
+    }),
   ]);
   console.log(`✅ Staff users: ${staffUsers.map(u => u.email).join(', ')}`);
 
-  // ── Create demo patient
-  const doctor = staffUsers.find(u => u.role === 'doctor')!;
+  // ── Create demo patient (DEMO hospital)
+  const doctor = staffUsers.find(u => u.email === 'doctor@demo.qcare')!;
   const demoPatient = await prisma.patient.upsert({
     where: { uhid: 'QC-2026-DEMO' },
     update: {},
@@ -179,7 +278,7 @@ async function main() {
     },
   });
 
-  // ── Create demo prescription
+  // ── Create demo prescription (DEMO hospital)
   const existingRx = await prisma.prescription.findFirst({ where: { patientId: demoPatient.id } });
   if (!existingRx) {
     const validUntil = new Date();
@@ -216,16 +315,73 @@ async function main() {
     });
   }
 
+  // ── Create MAX-01 canonical patient (Rameshwar Sharma / QC-9411) + active Rx
+  const maxDoctor = staffUsers.find(u => u.email === 'doctor@max01.qcare')!;
+  const rameshwarPatient = await prisma.patient.upsert({
+    where: { uhid: 'QC-2026-9411' },
+    update: {},
+    create: {
+      uhid: 'QC-2026-9411',
+      qrSessionId: 'QC-9411',
+      hospitalId: maxHospital.id,
+      name: 'Rameshwar Sharma',
+      age: 52,
+      gender: 'Male',
+      contact: '+91 98765 43210',
+      chronicConditions: 'Suspected Angina, Impaired Fasting Glucose',
+      priority: 'standard',
+    },
+  });
+
+  const existingMaxRx = await prisma.prescription.findFirst({ where: { patientId: rameshwarPatient.id } });
+  if (!existingMaxRx) {
+    const validUntil = new Date();
+    validUntil.setDate(validUntil.getDate() + 30);
+
+    await prisma.prescription.create({
+      data: {
+        id: 'RX-MAX-9411',
+        patientId: rameshwarPatient.id,
+        doctorId: maxDoctor.id,
+        hospitalId: maxHospital.id,
+        diagnosis: 'Exertional Chest Discomfort — Rule Out Acute Coronary Syndrome',
+        clinicalNotes: 'Monitor BP daily. Avoid strenuous exertion until 12-Lead ECG & Chest X-Ray review.',
+        followUpDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        validUntil,
+        medications: {
+          create: [
+            { drugName: 'Atorva / Lipitor', genericName: 'Atorvastatin', dose: '20mg', frequency: 'Once daily (OD)', duration: '30 days', route: 'Oral', instructions: 'At bedtime', quantity: '30 tablets' },
+            { drugName: 'Amlodac / Norvasc', genericName: 'Amlodipine', dose: '5mg', frequency: 'Once daily (OD)', duration: '30 days', route: 'Oral', instructions: 'After breakfast', quantity: '30 tablets' },
+            { drugName: 'Omez / Pan', genericName: 'Omeprazole', dose: '20mg', frequency: 'Once daily (OD)', duration: '14 days', route: 'Oral', instructions: 'Before breakfast', quantity: '14 capsules' },
+          ],
+        },
+      },
+    });
+
+    await prisma.medicalHistoryEntry.create({
+      data: {
+        patientId: rameshwarPatient.id,
+        type: 'prescription',
+        title: 'Prescription issued by Dr. Ananya Sen',
+        summary: 'Diagnosis: Exertional Chest Discomfort. 3 medications prescribed.',
+        linkedPrescriptionId: 'RX-MAX-9411',
+      },
+    });
+  }
+
   console.log(`✅ Demo patient: ${demoPatient.uhid} (QR: ${demoPatient.qrSessionId})`);
+  console.log(`✅ MAX-01 patient: ${rameshwarPatient.uhid} (QR: ${rameshwarPatient.qrSessionId})`);
 
   console.log('\n🎉 Seed complete!');
   console.log('\n📋 Demo credentials (password: QCare@123):');
-  console.log('  doctor@demo.qcare       → Doctor Portal');
-  console.log('  lab@demo.qcare          → Lab Portal');
-  console.log('  pharmacist@demo.qcare   → Pharmacy Portal');
-  console.log('  admin@demo.qcare        → Admin Portal');
-  console.log('\n🔑 Demo Patient QR Session: QC-DEMO');
-  console.log('  Scan QR at pharmacy to pull up Rajesh Kumar\'s prescriptions.');
+  console.log('  doctor@demo.qcare       → Doctor Portal (DEMO)');
+  console.log('  lab@demo.qcare          → Lab Portal (DEMO)');
+  console.log('  pharmacist@demo.qcare   → Pharmacy Portal (DEMO)');
+  console.log('  admin@demo.qcare        → Admin Portal (DEMO)');
+  console.log('  doctor@max01.qcare      → Doctor Portal (MAX-01 · Dr. Ananya Sen)');
+  console.log('  lab@max01.qcare         → Lab Portal (MAX-01)');
+  console.log('  pharmacist@max01.qcare  → Pharmacy Portal (MAX-01)');
+  console.log('\n🔑 Demo Patient QR Sessions: QC-DEMO (DEMO), QC-9411 (MAX-01)');
 }
 
 main()
