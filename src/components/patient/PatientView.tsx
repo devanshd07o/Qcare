@@ -123,7 +123,10 @@ export const PatientView: React.FC = () => {
   return (
     <div className="space-y-6 pb-16 font-sans">
       {/* Live Calling Alert Banner */}
-      {callingAlert && (callingAlert.patientName === selectedPatient.name || !callingAlert.patientName) && (
+      {callingAlert &&
+        (callingAlert.patientId
+          ? callingAlert.patientId === selectedPatient.id
+          : callingAlert.patientName === selectedPatient.name || !callingAlert.patientName) && (
         <div className="bg-teal-800 text-white p-4 rounded-2xl border border-teal-900 flex items-center justify-between gap-3 shadow-md animate-bounce">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">

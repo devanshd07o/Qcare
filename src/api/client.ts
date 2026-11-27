@@ -3,22 +3,52 @@
 
 const API_BASE = import.meta.env['VITE_API_URL'] ?? 'http://localhost:4000/api';
 
+function safeGetStorage(key: string): string | null {
+  try {
+    return typeof window !== 'undefined' && typeof localStorage?.getItem === 'function'
+      ? localStorage.getItem(key)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeSetStorage(key: string, value: string): void {
+  try {
+    if (typeof window !== 'undefined' && typeof localStorage?.setItem === 'function') {
+      localStorage.setItem(key, value);
+    }
+  } catch {
+    // Ignore storage unavailability
+  }
+}
+
+function safeRemoveStorage(key: string): void {
+  try {
+    if (typeof window !== 'undefined' && typeof localStorage?.removeItem === 'function') {
+      localStorage.removeItem(key);
+    }
+  } catch {
+    // Ignore storage unavailability
+  }
+}
+
 // ── Token storage (memory + localStorage)
-let accessToken: string | null = localStorage.getItem('qcare_access_token');
-let refreshTokenValue: string | null = localStorage.getItem('qcare_refresh_token');
+let accessToken: string | null = safeGetStorage('qcare_access_token');
+let refreshTokenValue: string | null = safeGetStorage('qcare_refresh_token');
 
 export function setTokens(at: string, rt: string): void {
   accessToken = at;
   refreshTokenValue = rt;
-  localStorage.setItem('qcare_access_token', at);
-  localStorage.setItem('qcare_refresh_token', rt);
+  safeSetStorage('qcare_access_token', at);
+  safeSetStorage('qcare_refresh_token', rt);
 }
 
 export function clearTokens(): void {
   accessToken = null;
   refreshTokenValue = null;
-  localStorage.removeItem('qcare_access_token');
-  localStorage.removeItem('qcare_refresh_token');
+  safeRemoveStorage('qcare_access_token');
+  safeRemoveStorage('qcare_refresh_token');
 }
 
 export function getAccessToken(): string | null {

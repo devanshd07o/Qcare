@@ -33,8 +33,12 @@ import {
   dispenseMedicationsAction,
   loginPharmacistAction,
   applyExternalSyncAction,
-  getHospitalState
+  getHospitalState,
+  getMemoizedRoutingPlan,
+  belongsToHospital,
+  resolveSelectedPatient
 } from './useHospitalStore';
+import { setTokens, getAccessToken } from '../api/client';
 import { findHospitalByQuery, REGISTERED_HOSPITALS } from '../data/mockHospitalData';
 import { Patient } from '../types';
 
@@ -238,7 +242,7 @@ describe('Hospital State Machine & End-to-End Workflow', () => {
         name: `Stress Patient ${i}`,
         age: 20 + (i % 60),
         gender: i % 2 === 0 ? 'Male' : 'Female',
-        contact: `98000000${i.toString().padStart(2, '0')}`,
+        contact: `9800000${i.toString().padStart(3, '0')}`,
         chiefComplaint: `Symptom report ${i}`,
         priority: i % 10 === 0 ? 'emergency' : 'standard'
       });
@@ -884,6 +888,409 @@ describe('Hospital State Machine & End-to-End Workflow', () => {
         updatedAtMs: Date.now() - 60_000
       });
       expect(getHospitalState().patients.some(p => p.id === dynPat.id)).toBe(true);
+    });
+  });
+
+  describe('Queue Lifecycle Edge Cases (#7 hold alert, #8 discharge ghosts, #9 duplicate report)', () => {
+    beforeEach(() => {
+      resetToCleanSlateAction();
+    });
+
+    const OPEN_STATUSES = new Set(['waiting', 'called', 'on_hold', 'in_progress']);
+
+    it('#7 clears callingAlert when the announced token is put on hold', () => {
+      const pat = registerPatientAction({
+        name: 'Hold Target',
+        age: 33,
+        gender: 'Male',
+        contact: '9811100011',
+        chiefComplaint: 'Dizziness'
+      });
+      prescribeTestsAction(pat.id, ['test-fbs']);
+
+      const fbsTokenId = getHospitalState().patients.find(p => p.id === pat.id)!.activeTokenIds['test-fbs'];
+      callPatientAction(fbsTokenId);
+
+      const announcedNumber = getHospitalState().queueTokens.find(t => t.id === fbsTokenId)!.tokenNumber;
+      expect(getHospitalState().callingAlert?.tokenNumber).toBe(announcedNumber);
+
+      putTokenOnHoldAction(fbsTokenId);
+
+      const afterHold = getHospitalState();
+      expect(afterHold.queueTokens.find(t => t.id === fbsTokenId)?.status).toBe('on_hold');
+      expect(afterHold.callingAlert).toBeNull();
+    });
+
+    it('#7 preserves callingAlert when a different token is put on hold, and ignores unknown token ids', () => {
+      const p1 = registerPatientAction({ name: 'Announced Patient', age: 30, gender: 'Male', contact: '9811100012' });
+      const p2 = registerPatientAction({ name: 'Other Patient', age: 41, gender: 'Female', contact: '9811100013' });
+      prescribeTestsAction(p1.id, ['test-cbc']);
+      prescribeTestsAction(p2.id, ['test-fbs']);
+
+      const tokens = getHospitalState();
+      const p1TokenId = tokens.patients.find(p => p.id === p1.id)!.activeTokenIds['test-cbc'];
+      const p2TokenId = tokens.patients.find(p => p.id === p2.id)!.activeTokenIds['test-fbs'];
+
+      callPatientAction(p1TokenId);
+      const announcedNumber = getHospitalState().callingAlert?.tokenNumber;
+      expect(announcedNumber).toBeTruthy();
+
+      putTokenOnHoldAction(p2TokenId);
+
+      const afterOtherHold = getHospitalState();
+      expect(afterOtherHold.queueTokens.find(t => t.id === p2TokenId)?.status).toBe('on_hold');
+      expect(afterOtherHold.callingAlert?.tokenNumber).toBe(announcedNumber);
+
+      // Unknown token id must be a true no-op (no state version bump)
+      const versionBefore = getHospitalState().stateVersion;
+      putTokenOnHoldAction('tok-does-not-exist');
+      expect(getHospitalState().stateVersion).toBe(versionBefore);
+    });
+
+    it('#8 cancels every still-open token for a discharged patient, clears the stale alert, and leaves other patients queued', () => {
+      const target = registerPatientAction({
+        name: 'Discharge Target',
+        age: 45,
+        gender: 'Male',
+        contact: '9811100021',
+        chiefComplaint: 'Chest tightness'
+      });
+      const bystander = registerPatientAction({
+        name: 'Bystander',
+        age: 52,
+        gender: 'Female',
+        contact: '9811100022',
+        chiefComplaint: 'Routine review'
+      });
+
+      prescribeTestsAction(target.id, ['test-cbc', 'test-fbs', 'test-ecg']);
+      prescribeTestsAction(bystander.id, ['test-cbc']);
+
+      const beforeDischarge = getHospitalState();
+      const targetTokens = beforeDischarge.queueTokens.filter(t => t.patientId === target.id);
+      expect(targetTokens).toHaveLength(3);
+      expect(targetTokens.every(t => OPEN_STATUSES.has(t.status))).toBe(true);
+
+      const calledTokenId = targetTokens.find(t => t.testId === 'test-fbs')!.id;
+      callPatientAction(calledTokenId);
+      expect(getHospitalState().callingAlert).not.toBeNull();
+
+      verifyAndDischargePatientAction(target.id, 'Discharged early — labs deferred to next visit');
+
+      const afterDischarge = getHospitalState();
+      expect(afterDischarge.patients.find(p => p.id === target.id)?.status).toBe('discharged');
+      expect(afterDischarge.patients.find(p => p.id === target.id)?.doctorReviewStatus).toBe('completed');
+
+      // No ghost rows left in any bay queue for the discharged patient
+      expect(
+        afterDischarge.queueTokens.filter(t => t.patientId === target.id && OPEN_STATUSES.has(t.status))
+      ).toHaveLength(0);
+      expect(
+        afterDischarge.queueTokens.filter(t => t.patientId === target.id).every(t => t.status === 'cancelled')
+      ).toBe(true);
+      expect(afterDischarge.callingAlert).toBeNull();
+
+      // Unrelated patient keeps their queued token
+      expect(
+        afterDischarge.queueTokens.filter(t => t.patientId === bystander.id).every(t => t.status !== 'cancelled')
+      ).toBe(true);
+    });
+
+    it('#8 preserves already-completed tokens while cancelling the remainder on discharge', () => {
+      const pat = registerPatientAction({
+        name: 'Partial Lab Patient',
+        age: 37,
+        gender: 'Female',
+        contact: '9811100031'
+      });
+      prescribeTestsAction(pat.id, ['test-cbc', 'test-fbs']);
+
+      const cbcTokenId = getHospitalState().patients.find(p => p.id === pat.id)!.activeTokenIds['test-cbc'];
+      completeTestAndUploadReportAction(cbcTokenId, { 'Hemoglobin (Hb)': '13.5' }, 'Sample collected');
+      expect(getHospitalState().queueTokens.find(t => t.id === cbcTokenId)?.status).toBe('completed');
+
+      verifyAndDischargePatientAction(pat.id, 'Report reviewed, patient discharged');
+
+      const after = getHospitalState();
+      expect(after.queueTokens.find(t => t.id === cbcTokenId)?.status).toBe('completed');
+      expect(after.queueTokens.filter(t => t.patientId === pat.id && t.status === 'waiting')).toHaveLength(0);
+      expect(after.clinicalReports.filter(r => r.patientId === pat.id)).toHaveLength(1);
+    });
+
+    it('#9 rejects duplicate completion of an already-completed token', () => {
+      const pat = registerPatientAction({
+        name: 'Double Submit Patient',
+        age: 38,
+        gender: 'Female',
+        contact: '9811100041'
+      });
+      prescribeTestsAction(pat.id, ['test-fbs']);
+
+      const token = getHospitalState().queueTokens.find(
+        t => t.patientId === pat.id && t.testId === 'test-fbs'
+      )!;
+      const counterId = token.counterId!;
+      const servedBefore = getHospitalState().counters.find(c => c.id === counterId)!.servedCountToday;
+
+      completeTestAndUploadReportAction(token.id, { 'Fasting Blood Glucose': '142' }, 'First submission');
+
+      const afterFirst = getHospitalState();
+      expect(afterFirst.clinicalReports.filter(r => r.patientId === pat.id)).toHaveLength(1);
+      expect(afterFirst.counters.find(c => c.id === counterId)!.servedCountToday).toBe(servedBefore + 1);
+      const avgAfterFirst = afterFirst.counters.find(c => c.id === counterId)!.averageServiceMinutes;
+
+      // Second (duplicate) submission must be a complete no-op
+      completeTestAndUploadReportAction(token.id, { 'Fasting Blood Glucose': '142' }, 'Duplicate submission');
+
+      const afterSecond = getHospitalState();
+      expect(afterSecond.clinicalReports.filter(r => r.patientId === pat.id)).toHaveLength(1);
+      expect(afterSecond.counters.find(c => c.id === counterId)!.servedCountToday).toBe(servedBefore + 1);
+      expect(afterSecond.counters.find(c => c.id === counterId)!.averageServiceMinutes).toBe(avgAfterFirst);
+      expect(afterSecond.patients.find(p => p.id === pat.id)!.completedTests.filter(t => t === 'test-fbs')).toHaveLength(1);
+    });
+
+    it('#9 rejects completion of a cancelled token', () => {
+      const pat = registerPatientAction({
+        name: 'Cancelled Token Patient',
+        age: 44,
+        gender: 'Male',
+        contact: '9811100051'
+      });
+      prescribeTestsAction(pat.id, ['test-cbc', 'test-fbs']);
+
+      const fbsTokenId = getHospitalState().patients.find(p => p.id === pat.id)!.activeTokenIds['test-fbs'];
+
+      // Removing FBS from the order cancels its queued token
+      updatePatientVisitAndTestsAction(pat.id, { testIds: ['test-cbc'] });
+      expect(getHospitalState().queueTokens.find(t => t.id === fbsTokenId)?.status).toBe('cancelled');
+
+      const reportsBefore = getHospitalState().clinicalReports.length;
+      completeTestAndUploadReportAction(fbsTokenId, { 'Fasting Blood Glucose': '142' }, 'Should be ignored');
+
+      const after = getHospitalState();
+      expect(after.clinicalReports.length).toBe(reportsBefore);
+      expect(after.patients.find(p => p.id === pat.id)!.completedTests).not.toContain('test-fbs');
+      expect(after.queueTokens.find(t => t.id === fbsTokenId)?.status).toBe('cancelled');
+    });
+  });
+
+  describe('Routing Plan Memoization (#30)', () => {
+    beforeEach(() => {
+      resetToCleanSlateAction();
+    });
+
+    it('reuses the identical plan object for unchanged patient/queue references', () => {
+      const pat = registerPatientAction({
+        name: 'Memo Patient',
+        age: 50,
+        gender: 'Male',
+        contact: '9811100061',
+        chiefComplaint: 'Fatigue and breathlessness'
+      });
+      prescribeTestsAction(pat.id, ['test-cbc', 'test-fbs', 'test-ecg']);
+
+      const s = getHospitalState();
+      const patient = s.patients.find(p => p.id === pat.id)!;
+
+      const planA = getMemoizedRoutingPlan(patient, s.tests, s.departments, s.queueTokens, s.counters);
+      const planB = getMemoizedRoutingPlan(patient, s.tests, s.departments, s.queueTokens, s.counters);
+
+      // Same references in => no permutation search => same object out
+      expect(planB).toBe(planA);
+      expect(planA.smartRouteSteps.length).toBe(3);
+
+      // A new queue array reference must force recomputation
+      const planC = getMemoizedRoutingPlan(patient, s.tests, s.departments, [...s.queueTokens], s.counters);
+      expect(planC).not.toBe(planA);
+    });
+
+    it('returns the shared empty plan when no patient is selected', () => {
+      const s = getHospitalState();
+      const emptyA = getMemoizedRoutingPlan(null, s.tests, s.departments, s.queueTokens, s.counters);
+      const emptyB = getMemoizedRoutingPlan(null, s.tests, s.departments, s.queueTokens, s.counters);
+      expect(emptyA).toBe(emptyB);
+      expect(emptyA.smartRouteSteps).toHaveLength(0);
+    });
+  });
+
+  describe('Security, Identity & Clinical Integrity (#1, #2, #4, #5, #10, #12, #16, #35-#39)', () => {
+    beforeEach(() => {
+      resetToCleanSlateAction();
+    });
+
+    it('#2 avoids OPD-11..OPD-15 collision between dynamic walk-ins and canonical demo patients', () => {
+      const walkin = registerPatientAction({
+        name: 'First Walkin',
+        age: 34,
+        gender: 'Male',
+        contact: '9811100999'
+      });
+
+      expect(walkin.opdTokenNumber).toBe('OPD-16');
+
+      loadDoctorDemoPatientsAction();
+      const allTokens = getHospitalState().patients.map(p => p.opdTokenNumber);
+      expect(new Set(allTokens).size).toBe(allTokens.length);
+    });
+
+    it('#1 prevents patients[0] PHI fallback when activeRole is patient and selectedPatientId is missing', () => {
+      const p1 = registerPatientAction({
+        name: 'Real Patient One',
+        age: 35,
+        gender: 'Female',
+        contact: '9811100888'
+      });
+
+      const resolvedMissing = resolveSelectedPatient([p1], 'non-existent-id', 'patient');
+      expect(resolvedMissing).toBeNull();
+
+      const resolvedNull = resolveSelectedPatient([p1], null, 'patient');
+      expect(resolvedNull).toBeNull();
+
+      const resolvedValid = resolveSelectedPatient([p1], p1.id, 'patient');
+      expect(resolvedValid?.id).toBe(p1.id);
+    });
+
+    it('#4 belongsToHospital scopes tagged hospital records strictly while allowing untagged legacy fixtures', () => {
+      const targetHospital = findHospitalByQuery('SAFDARJUNG-04')!;
+      expect(belongsToHospital({ hospitalId: targetHospital.id, hospitalCode: targetHospital.code }, targetHospital)).toBe(true);
+      expect(belongsToHospital({ hospitalId: 'hosp-max-01', hospitalCode: 'MAX-01' }, targetHospital)).toBe(false);
+      expect(belongsToHospital({}, targetHospital)).toBe(true);
+    });
+
+    it('#5 includes patientId in callingAlert for unambiguous announcement matching', () => {
+      const p1 = registerPatientAction({ name: 'Duplicate Name', age: 30, gender: 'Male', contact: '9811100771' });
+      const p2 = registerPatientAction({ name: 'Duplicate Name', age: 45, gender: 'Male', contact: '9811100772' });
+      prescribeTestsAction(p1.id, ['test-cbc']);
+      prescribeTestsAction(p2.id, ['test-fbs']);
+
+      const p2TokId = getHospitalState().patients.find(p => p.id === p2.id)!.activeTokenIds['test-fbs'];
+      callPatientAction(p2TokId);
+
+      const alert = getHospitalState().callingAlert;
+      expect(alert?.patientId).toBe(p2.id);
+      expect(alert?.patientId).not.toBe(p1.id);
+    });
+
+    it('#10 clears stale calledAtMs and reindexes queuePosition on skipTokenAction', () => {
+      const p1 = registerPatientAction({ name: 'Queue First', age: 29, gender: 'Male', contact: '9811100661' });
+      const p2 = registerPatientAction({ name: 'Queue Second', age: 31, gender: 'Female', contact: '9811100662' });
+      prescribeTestsAction(p1.id, ['test-cbc']);
+      prescribeTestsAction(p2.id, ['test-cbc']);
+
+      const s1 = getHospitalState();
+      const t1 = s1.queueTokens.find(t => t.patientId === p1.id)!;
+      const t2 = s1.queueTokens.find(t => t.patientId === p2.id)!;
+
+      callPatientAction(t1.id);
+      expect(getHospitalState().queueTokens.find(t => t.id === t1.id)?.calledAtMs).toBeDefined();
+
+      skipTokenAction(t1.id);
+      const afterSkip = getHospitalState();
+      const skipped = afterSkip.queueTokens.find(t => t.id === t1.id)!;
+      const movedUp = afterSkip.queueTokens.find(t => t.id === t2.id)!;
+
+      expect(skipped.status).toBe('waiting');
+      expect(skipped.calledAtMs).toBeUndefined();
+      expect(movedUp.queuePosition).toBe(1);
+      expect(skipped.queuePosition).toBe(2);
+    });
+
+    it('#12 blocks dispensing an expired prescription based on validUntil', () => {
+      const pat = registerPatientAction({ name: 'Expired Rx Pat', age: 40, gender: 'Male', contact: '9811100551' });
+      const rx = issuePrescriptionAction(pat.id, [
+        { drugName: 'Calpol', genericName: 'Paracetamol', dose: '500mg', frequency: 'BD', duration: '3 days', route: 'Oral' }
+      ])!;
+
+      // Inject expired validUntil via external sync
+      const current = getHospitalState();
+      applyExternalSyncAction({
+        ...current,
+        prescriptions: current.prescriptions.map(item =>
+          item.id === rx.id ? { ...item, validUntil: new Date(Date.now() - 86_400_000).toISOString() } : item
+        ),
+        stateVersion: current.stateVersion + 1,
+        updatedAtMs: Date.now() + 1000
+      });
+
+      const res = dispenseMedicationsAction(rx.id, [rx.medications[0].id], 'Pharm Priya', 'Max Pharmacy');
+      expect(res).toBeNull();
+      expect(getHospitalState().prescriptions.find(r => r.id === rx.id)?.status).toBe('expired');
+    });
+
+    it('#16 clears stale backend JWT tokens when entering demo role sessions', () => {
+      const storageMap = new Map<string, string>();
+      vi.stubGlobal('window', {});
+      vi.stubGlobal('localStorage', {
+        getItem: (k: string) => storageMap.get(k) ?? null,
+        setItem: (k: string, v: string) => { storageMap.set(k, v); },
+        removeItem: (k: string) => { storageMap.delete(k); }
+      });
+
+      try {
+        setTokens('stale-jwt-access', 'stale-jwt-refresh');
+        expect(getAccessToken()).toBe('stale-jwt-access');
+
+        loginPharmacistAction('Pharm Demo', 'Max Pharmacy', '1234', 'MAX-01');
+        expect(getAccessToken()).toBeNull();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('#35/#36 validates phone at store boundary and never attributes doctorId to lab_tech', () => {
+      expect(() =>
+        registerPatientAction({
+          name: 'Bad Phone',
+          age: 30,
+          gender: 'Male',
+          contact: '123'
+        })
+      ).toThrow(/mobile number/i);
+
+      loginLabTechAction('Tech Arvind', 'dept-pathology', '1234', 'MAX-01');
+      const pat = registerPatientAction({
+        name: 'Lab Reg Pat',
+        age: 62,
+        gender: 'Male',
+        contact: '9811100444'
+      });
+      expect(pat.priority).toBe('senior');
+      expect(pat.prescribedDoctorName).not.toBe('Tech Arvind');
+
+      // #37 preserves senior priority on in-place update
+      updatePatientVisitAndTestsAction(pat.id, {
+        testIds: ['test-cbc'],
+        priority: 'standard'
+      });
+      expect(getHospitalState().patients.find(p => p.id === pat.id)?.priority).toBe('senior');
+    });
+
+    it('#39 prevents privilege escalation to doctor on navigateBackAction with empty history for non-doctor roles', () => {
+      loginPharmacistAction('Pharm Priya', 'Max Pharmacy', '1234', 'MAX-01');
+      // Simulate direct session (e.g. page reload or QR deep-link) with empty history
+      const s = getHospitalState();
+      applyExternalSyncAction({
+        ...s,
+        navigationHistory: [],
+        stateVersion: s.stateVersion + 1,
+        updatedAtMs: Date.now() + 1000
+      });
+
+      navigateBackAction(true);
+      expect(getHospitalState().currentUser).toBeNull();
+
+      loginAsPatientWithSessionAction('QC-9411');
+      const sPat = getHospitalState();
+      applyExternalSyncAction({
+        ...sPat,
+        navigationHistory: [],
+        stateVersion: sPat.stateVersion + 1,
+        updatedAtMs: Date.now() + 2000
+      });
+
+      navigateBackAction(true);
+      expect(getHospitalState().currentUser).toBeNull();
     });
   });
 });

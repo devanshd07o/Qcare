@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useHospitalStore } from '../../store/useHospitalStore';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useHospitalStore, belongsToHospital } from '../../store/useHospitalStore';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import {
@@ -62,7 +62,7 @@ export const LabPortal: React.FC = () => {
     departments,
     tests,
     counters,
-    queueTokens,
+    queueTokens: allQueueTokens,
     activeBayDepartmentId,
     setActiveBayDepartmentId,
     callPatient,
@@ -75,6 +75,11 @@ export const LabPortal: React.FC = () => {
 
   const currentDept = departments.find(d => d.id === activeBayDepartmentId) || departments[0];
   const currentCounter = counters.find(c => c.departmentId === currentDept?.id);
+
+  const queueTokens = useMemo(
+    () => allQueueTokens.filter(t => belongsToHospital(t, currentHospital)),
+    [allQueueTokens, currentHospital]
+  );
 
   /* ── token lists ── */
   const deptTokens = currentDept ? queueTokens.filter(t => t.departmentId === currentDept.id) : [];

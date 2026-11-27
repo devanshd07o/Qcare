@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Hospital,
   Department,
@@ -17,7 +17,8 @@ import {
   PharmacyDispenseRecord,
   MedicationItem,
   IssueMedicationInput,
-  UpdatePatientVisitPayload
+  UpdatePatientVisitPayload,
+  QueueRoutingPlan
 } from '../types';
 import {
   DEFAULT_HOSPITAL,
@@ -36,6 +37,7 @@ import {
 import { calculateOptimalQueueRoute } from '../engine/queueRouter';
 import { hospitalAudio } from '../engine/chimeAudio';
 import { sanitizeString, validatePatientName, validatePatientAge, validatePatientPhone, evaluateMetricFlag } from '../engine/sanitizer';
+import { clearTokens } from '../api/client';
 
 export interface NavigationHistoryEntry {
   role: UserRole;
@@ -67,6 +69,7 @@ interface HospitalStoreState {
   navigationHistory: NavigationHistoryEntry[];
   callingAlert: {
     tokenNumber: string;
+    patientId?: string;
     patientName: string;
     roomNo: string;
     counterName: string;
@@ -203,13 +206,17 @@ if (typeof window !== 'undefined') {
       state = {
         ...state,
         ...parsed,
+        patients: Array.isArray(parsed.patients) ? parsed.patients : [],
+        queueTokens: Array.isArray(parsed.queueTokens) ? parsed.queueTokens : [],
+        clinicalReports: Array.isArray(parsed.clinicalReports) ? parsed.clinicalReports : [],
         prescriptions: Array.isArray(parsed.prescriptions) ? parsed.prescriptions : [],
         dispenseRecords: Array.isArray(parsed.dispenseRecords) ? parsed.dispenseRecords : [],
+        navigationHistory: Array.isArray(parsed.navigationHistory) ? parsed.navigationHistory : [],
         stateVersion: typeof parsed.stateVersion === 'number' ? parsed.stateVersion : 0,
         updatedAtMs: typeof parsed.updatedAtMs === 'number' ? parsed.updatedAtMs : 0,
-        currentUser: hydratedUser || parsed.currentUser || null,
+        currentUser: hydratedUser || null,
         currentHospital: effectiveHosp,
-        activeRole: hydratedRole || parsed.activeRole || 'doctor',
+        activeRole: hydratedUser ? hydratedRole : 'doctor',
         doctorView: resolvedDoctorView,
         doctorSidebarExpanded: resolvedSidebarExpanded,
         selectedPatientId: hydratedPatientId || parsed.selectedPatientId || null,
@@ -318,9 +325,7 @@ function flushSyncPersistence() {
     counters: state.counters,
     stateVersion: state.stateVersion,
     updatedAtMs: state.updatedAtMs,
-    currentUser: state.currentUser,
     currentHospital: state.currentHospital,
-    activeRole: state.activeRole,
     doctorView: state.doctorView,
     doctorSidebarExpanded: state.doctorSidebarExpanded,
     activeLanguage: state.activeLanguage,
@@ -393,6 +398,17 @@ function updateState(updater: (prev: HospitalStoreState) => HospitalStoreState, 
 let _atomicSeq = 0;
 const RESERVED_DEMO_SERIALS = new Set([9408, 9409, 9410, 9411, 9412]);
 
+/**
+ * Token statuses that still occupy a diagnostic bay queue.
+ * Discharging a patient must release all of these so no ghost rows are left behind.
+ */
+const OPEN_QUEUE_TOKEN_STATUSES: ReadonlySet<QueueToken['status']> = new Set<QueueToken['status']>([
+  'waiting',
+  'called',
+  'on_hold',
+  'in_progress'
+]);
+
 function nextAtomicSeq(): number {
   _atomicSeq += 1;
   return _atomicSeq;
@@ -418,9 +434,11 @@ function generateUniquePatientSerial(existingPatients: Patient[]): number {
   return 10000 + nextAtomicSeq();
 }
 
+const RESERVED_DEMO_OPD_NUMBERS = new Set([11, 12, 13, 14, 15]);
+
 function generateUniqueOpdToken(existingPatients: Patient[]): string {
   const usedTokens = new Set(existingPatients.map(p => (p.opdTokenNumber || '').toUpperCase()));
-  let maxNum = 13;
+  let maxNum = 15;
   for (const p of existingPatients) {
     const parsed = parseInt((p.opdTokenNumber || '').replace(/\D/g, ''), 10);
     if (Number.isFinite(parsed) && parsed > maxNum) {
@@ -428,10 +446,40 @@ function generateUniqueOpdToken(existingPatients: Patient[]): string {
     }
   }
   let nextNum = maxNum + 1;
-  while (usedTokens.has(`OPD-${nextNum}`)) {
+  while (RESERVED_DEMO_OPD_NUMBERS.has(nextNum) || usedTokens.has(`OPD-${nextNum}`)) {
     nextNum += 1;
   }
   return `OPD-${nextNum}`;
+}
+
+export function belongsToHospital(
+  record: { hospitalId?: string; hospitalCode?: string },
+  hospital: Hospital
+): boolean {
+  if (!record.hospitalId && !record.hospitalCode) return true;
+  if (record.hospitalId && record.hospitalId === hospital.id) return true;
+  if (record.hospitalCode && record.hospitalCode.toUpperCase() === hospital.code.toUpperCase()) return true;
+  return false;
+}
+
+export function resolveSelectedPatient(
+  patients: Patient[],
+  selectedPatientId: string | null,
+  activeRole: UserRole,
+  currentHospital?: Hospital
+): Patient | null {
+  const scoped = currentHospital
+    ? patients.filter(p => belongsToHospital(p, currentHospital))
+    : patients;
+
+  if (selectedPatientId) {
+    const exact = scoped.find(p => p.id === selectedPatientId) || patients.find(p => p.id === selectedPatientId);
+    if (exact) return exact;
+    if (activeRole === 'patient') return null;
+  }
+
+  if (activeRole === 'patient') return null;
+  return scoped[0] || patients[0] || null;
 }
 
 /**
@@ -544,24 +592,9 @@ export function navigateBackAction(fromPopState: boolean = false): boolean {
     return true;
   }
 
-  // 3. If history is empty but user is currently logged in
+  // 3. If history is empty but user is currently logged in, sign out safely to Auth Gate
+  // (never escalate non-doctor sessions to doctor role without explicit login)
   if (state.currentUser !== null) {
-    if (state.activeRole === 'patient' || state.activeRole === 'lab_tech' || state.activeRole === 'pharmacist') {
-      // Return to doctor workstation if in patient, lab, or pharmacy view
-      setRoleAction('doctor');
-      if (!fromPopState && typeof window !== 'undefined' && window.history) {
-        isInternalNavBack = true;
-        try {
-          window.history.back();
-        } catch {}
-        setTimeout(() => {
-          isInternalNavBack = false;
-        }, 150);
-      }
-      return true;
-    }
-
-    // In doctor view with no history: sign out gracefully to login screen
     signOutAction();
     if (!fromPopState && typeof window !== 'undefined' && window.history) {
       isInternalNavBack = true;
@@ -717,7 +750,8 @@ export function registerPatientAction(data: {
   if (!ageVal.isValid) throw new Error(ageVal.error || 'Invalid patient age');
 
   const phoneVal = validatePatientPhone(data.contact);
-  const cleanPhone = phoneVal.isValid ? phoneVal.value : data.contact;
+  if (!phoneVal.isValid) throw new Error(phoneVal.error || 'Invalid mobile number');
+  const cleanPhone = phoneVal.value;
 
   const serial = generateUniquePatientSerial(state.patients);
   const opdTokenNumber = generateUniqueOpdToken(state.patients);
@@ -727,6 +761,7 @@ export function registerPatientAction(data: {
 
   const isSenior = ageVal.value >= 60;
   const calculatedPriority = data.priority === 'emergency' ? 'emergency' : (isSenior ? 'senior' : 'standard');
+  const activeDoctor = state.currentUser?.role === 'doctor' ? state.currentUser : null;
 
   const newPatient: Patient = {
     id: `pat-${nowMs}-${nextAtomicSeq()}-${serial}`,
@@ -740,9 +775,9 @@ export function registerPatientAction(data: {
     contact: cleanPhone,
     priority: calculatedPriority,
     doctorPriority: data.priority === 'emergency' ? 'urgent' : 'normal',
-    prescribedDoctorId: state.currentUser?.id || 'doc-on-duty',
-    prescribedDoctorName: state.currentUser?.name || state.currentHospital.doctorName || 'Attending Physician',
-    prescribedDoctorRoom: state.currentUser?.identifier || state.currentHospital.doctorRoom || 'Room 101',
+    prescribedDoctorId: activeDoctor?.id || 'doc-on-duty',
+    prescribedDoctorName: activeDoctor?.name || state.currentHospital.doctorName || 'Attending Physician',
+    prescribedDoctorRoom: activeDoctor?.identifier || state.currentHospital.doctorRoom || 'Room 101',
     chiefComplaint: sanitizeString(data.chiefComplaint || 'Walk-in consultation'),
     symptoms: sanitizeString(data.chiefComplaint || 'Walk-in consultation'),
     prescribedTests: [],
@@ -794,13 +829,15 @@ function reconcilePatientVisitInternal(
   let nextContact = patient.contact;
   if (updates.contact !== undefined) {
     const phoneVal = validatePatientPhone(updates.contact);
-    nextContact = phoneVal.isValid ? phoneVal.value : updates.contact;
+    if (!phoneVal.isValid) throw new Error(phoneVal.error || 'Invalid mobile number');
+    nextContact = phoneVal.value;
   }
 
   const nextGender = updates.gender ?? patient.gender;
+  const isPreservedSenior = nextAge >= 60 || (patient.priority === 'senior' && updates.priority !== 'emergency');
   const nextPriority: Patient['priority'] = updates.priority
-    ? (updates.priority === 'emergency' ? 'emergency' : (nextAge >= 60 ? 'senior' : 'standard'))
-    : (updates.age !== undefined ? (patient.priority === 'emergency' ? 'emergency' : (nextAge >= 60 ? 'senior' : 'standard')) : patient.priority);
+    ? (updates.priority === 'emergency' ? 'emergency' : (isPreservedSenior ? 'senior' : 'standard'))
+    : (updates.age !== undefined ? (patient.priority === 'emergency' ? 'emergency' : (isPreservedSenior ? 'senior' : 'standard')) : patient.priority);
   const nextDoctorPriority: DoctorPriority = updates.doctorPriority ?? (updates.priority === 'emergency' ? 'urgent' : (patient.doctorPriority || 'normal'));
   const nextComplaint = updates.chiefComplaint !== undefined ? sanitizeString(updates.chiefComplaint) : patient.chiefComplaint;
   const nextNotes = updates.notes !== undefined ? sanitizeString(updates.notes) : patient.notes;
@@ -1062,6 +1099,7 @@ export function callPatientAction(tokenId: string) {
       queueTokens: updatedTokens,
       callingAlert: {
         tokenNumber: token.tokenNumber,
+        patientId: token.patientId,
         patientName: token.patientName || 'Patient',
         roomNo,
         counterName
@@ -1075,13 +1113,24 @@ export function callPatientAction(tokenId: string) {
  * Put patient on hold (no show)
  */
 export function putTokenOnHoldAction(tokenId: string) {
-  updateState(prev => ({
-    ...prev,
-    queueTokens: prev.queueTokens.map(t =>
-      t.id === tokenId ? { ...t, status: 'on_hold' as const } : t
-    ),
-    toastNotification: `Token put on-hold.`
-  }));
+  updateState(prev => {
+    const token = prev.queueTokens.find(t => t.id === tokenId);
+    if (!token) return prev;
+
+    // Parking a token must also retract the live announcement banner that points at it,
+    // otherwise the patient keeps being told to walk to a bay they were just removed from.
+    const isAlertForThisToken =
+      prev.callingAlert !== null && prev.callingAlert.tokenNumber === token.tokenNumber;
+
+    return {
+      ...prev,
+      queueTokens: prev.queueTokens.map(t =>
+        t.id === tokenId ? { ...t, status: 'on_hold' as const } : t
+      ),
+      callingAlert: isAlertForThisToken ? null : prev.callingAlert,
+      toastNotification: `Token put on-hold.`
+    };
+  });
 }
 
 /**
@@ -1111,6 +1160,10 @@ export function completeTestAndUploadReportAction(
 ) {
   const token = state.queueTokens.find(t => t.id === tokenId);
   if (!token) return;
+
+  // Idempotency guard: a token that is already completed (or was cancelled) must never
+  // mint a second ClinicalReport, double-count the counter, or re-fold the TAT average.
+  if (token.status === 'completed' || token.status === 'cancelled') return;
 
   const test = state.tests.find(t => t.id === token.testId);
   const dept = state.departments.find(d => d.id === token.departmentId);
@@ -1420,22 +1473,34 @@ export function skipTokenAction(tokenId: string) {
     if (deptTokens.length <= 1) {
       return {
         ...prev,
-        queueTokens: prev.queueTokens.map(t => t.id === tokenId ? { ...t, status: 'waiting' as const } : t),
+        queueTokens: prev.queueTokens.map(t =>
+          t.id === tokenId ? { ...t, status: 'waiting' as const, calledAt: undefined, calledAtMs: undefined } : t
+        ),
         callingAlert: prev.callingAlert?.tokenNumber === token.tokenNumber ? null : prev.callingAlert,
         toastNotification: `Token ${token.tokenNumber} is the only token in queue.`
       };
     }
 
     const otherTokens = prev.queueTokens.filter(t => t.id !== tokenId);
+    const remainingWaitingIds = otherTokens
+      .filter(t => t.departmentId === token.departmentId && (t.status === 'waiting' || t.status === 'called'))
+      .map(t => t.id);
+    const reindexedOther = otherTokens.map(t => {
+      const idx = remainingWaitingIds.indexOf(t.id);
+      return idx >= 0 ? { ...t, queuePosition: idx + 1 } : t;
+    });
+
     const updatedToken: QueueToken = {
       ...token,
       status: 'waiting',
-      queuePosition: deptTokens.length
+      calledAt: undefined,
+      calledAtMs: undefined,
+      queuePosition: remainingWaitingIds.length + 1
     };
 
     return {
       ...prev,
-      queueTokens: [...otherTokens, updatedToken],
+      queueTokens: [...reindexedOther, updatedToken],
       callingAlert: prev.callingAlert?.tokenNumber === token.tokenNumber ? null : prev.callingAlert,
       toastNotification: `⏭️ Skipped token ${token.tokenNumber}. Serving next in queue.`
     };
@@ -1505,10 +1570,26 @@ export function verifyAndDischargePatientAction(patientId: string, doctorConclus
         : r
     );
 
+    // A discharged patient must not keep occupying any diagnostic bay queue.
+    // Release every still-open token so lab workstations drop the ghost row immediately.
+    const cancelledTokenNumbers = new Set<string>();
+    const updatedQueueTokens = prev.queueTokens.map(t => {
+      if (t.patientId !== patientId || !OPEN_QUEUE_TOKEN_STATUSES.has(t.status)) return t;
+      cancelledTokenNumbers.add(t.tokenNumber);
+      return { ...t, status: 'cancelled' as const };
+    });
+
+    const nextCallingAlert =
+      prev.callingAlert && cancelledTokenNumbers.has(prev.callingAlert.tokenNumber)
+        ? null
+        : prev.callingAlert;
+
     return {
       ...prev,
       patients: updatedPatients,
       clinicalReports: updatedReports,
+      queueTokens: updatedQueueTokens,
+      callingAlert: nextCallingAlert,
       toastNotification: `Patient ${patient.name} (${patient.opdTokenNumber}) verified and discharged!`
     };
   }, true);
@@ -1749,6 +1830,7 @@ export function loginDoctorAction(
     : resolveIndianDoctorAvatar(cleanDoc, resolvedGender);
   
   const nextHistory = pushNavigationHistory('Sign In Gate');
+  clearTokens();
 
   updateState(prev => ({
     ...prev,
@@ -1800,6 +1882,7 @@ export function loginLabTechAction(
   const counter = targetCounters.find(c => c.departmentId === dept.id);
 
   const nextHistory = pushNavigationHistory('Sign In Gate');
+  clearTokens();
 
   updateState(prev => ({
     ...prev,
@@ -1843,6 +1926,7 @@ export function loginPharmacistAction(
   const cleanPharmacist = sanitizeString(pharmacistName) || 'Duty Pharmacist';
   const cleanPharmacy = sanitizeString(pharmacyName) || `${targetHosp.shortName} Pharmacy`;
   const nextHistory = pushNavigationHistory('Sign In Gate');
+  clearTokens();
 
   updateState(prev => ({
     ...prev,
@@ -1978,13 +2062,26 @@ export function dispenseMedicationsAction(
     if (rxIdx === -1) return prev;
 
     const rx = prev.prescriptions[rxIdx];
-    if (rx.status === 'fully_dispensed' || rx.status === 'expired') return prev;
+    const nowMs = Date.now();
+    const validUntilMs = rx.validUntil ? Date.parse(rx.validUntil) : NaN;
+    const isExpired = rx.status === 'expired' || (Number.isFinite(validUntilMs) && validUntilMs < nowMs);
+    if (rx.status === 'fully_dispensed' || isExpired) {
+      if (isExpired && rx.status !== 'expired') {
+        const expiredList = [...prev.prescriptions];
+        expiredList[rxIdx] = { ...rx, status: 'expired' };
+        return {
+          ...prev,
+          prescriptions: expiredList,
+          toastNotification: `Prescription ${rx.id} has expired and cannot be dispensed.`
+        };
+      }
+      return prev;
+    }
 
     const requestedSet = new Set(medicationIds);
     const newlyDispensedMeds = rx.medications.filter(m => requestedSet.has(m.id) && !m.dispensed);
     if (newlyDispensedMeds.length === 0) return prev;
 
-    const nowMs = Date.now();
     const nowIso = new Date(nowMs).toISOString();
     const resolvedPharmacist = sanitizeString(
       pharmacistName ||
@@ -2127,6 +2224,7 @@ export function loginPatientLookupAction(query: string): { success: boolean; err
  * Sign Out to Auth Gate Screen
  */
 export function signOutAction() {
+  clearTokens();
   if (typeof window !== 'undefined') {
     try {
       localStorage.removeItem(SESSION_KEY);
@@ -2247,6 +2345,7 @@ export function loginAsPatientWithSessionAction(sessionIdOrUhid: string, payload
   }
 
   if (patient) {
+    clearTokens();
     const nextHistory = pushNavigationHistory('Sign In Gate');
     updateState(prev => ({
       ...prev,
@@ -2370,6 +2469,75 @@ export function getHospitalState(): HospitalStoreState {
 // REACT HOOK
 // -------------------------------------------------------------
 
+const EMPTY_ROUTING_PLAN: QueueRoutingPlan = {
+  patientId: '',
+  calculatedAt: '',
+  smartRouteSteps: [],
+  smartTotalTimeMinutes: 0,
+  naiveTotalTimeMinutes: 0,
+  timeSavedMinutes: 0,
+  percentageSaved: 0,
+  bottlenecksAvoided: [],
+  fastingSatisfied: true,
+  transitTotalMinutes: 0
+};
+
+interface RoutingPlanCacheKey {
+  patient: Patient;
+  tests: DiagnosticTest[];
+  departments: Department[];
+  queueTokens: QueueToken[];
+  counters: Counter[];
+}
+
+let _routingPlanCache: { key: RoutingPlanCacheKey; plan: QueueRoutingPlan } | null = null;
+
+/**
+ * Identity-keyed memo for the diagnostic route plan.
+ *
+ * calculateOptimalQueueRoute enumerates up to 7! test permutations per prescribed order, so it
+ * must never be paid on unrelated re-renders (keystrokes in the walk-in form, toast banners,
+ * telemetry ticks). The store replaces arrays immutably on every mutation, therefore reference
+ * equality over these five inputs is a sound cache key: a real queue/patient change always
+ * yields a new reference and forces recomputation.
+ */
+export function getMemoizedRoutingPlan(
+  patient: Patient | null,
+  tests: DiagnosticTest[],
+  departments: Department[],
+  queueTokens: QueueToken[],
+  counters: Counter[]
+): QueueRoutingPlan {
+  if (!patient) return EMPTY_ROUTING_PLAN;
+
+  const cached = _routingPlanCache;
+  if (
+    cached &&
+    cached.key.patient === patient &&
+    cached.key.tests === tests &&
+    cached.key.departments === departments &&
+    cached.key.queueTokens === queueTokens &&
+    cached.key.counters === counters
+  ) {
+    return cached.plan;
+  }
+
+  const plan: QueueRoutingPlan = calculateOptimalQueueRoute(
+    patient,
+    tests,
+    departments,
+    queueTokens,
+    counters
+  );
+
+  _routingPlanCache = {
+    key: { patient, tests, departments, queueTokens, counters },
+    plan
+  };
+
+  return plan;
+}
+
 export function useHospitalStore() {
   const [snapshot, setSnapshot] = useState(state);
 
@@ -2381,24 +2549,27 @@ export function useHospitalStore() {
     };
   }, []);
 
-  const selectedPatient = snapshot.patients.find(p => p.id === snapshot.selectedPatientId) || snapshot.patients[0] || null;
+  const selectedPatient = resolveSelectedPatient(
+    snapshot.patients,
+    snapshot.selectedPatientId,
+    snapshot.activeRole,
+    snapshot.currentHospital
+  );
 
-  // Lazy getter — only computes route when actually called (PatientView / HospitalFloorRadar)
-  // NOT computed on every render for DoctorPortal/Header/Sidebar etc.
-  const currentRoutingPlan = selectedPatient
-    ? calculateOptimalQueueRoute(selectedPatient, snapshot.tests, snapshot.departments, snapshot.queueTokens, snapshot.counters)
-    : {
-        patientId: '',
-        calculatedAt: '',
-        smartRouteSteps: [],
-        smartTotalTimeMinutes: 0,
-        naiveTotalTimeMinutes: 0,
-        timeSavedMinutes: 0,
-        percentageSaved: 0,
-        bottlenecksAvoided: [],
-        fastingSatisfied: true,
-        transitTotalMinutes: 0
-      };
+  // Memoized on patient identity + live queue references only, so re-renders that do not
+  // touch patient/queue data (typing, hover tooltips, clock ticks) reuse the previous plan
+  // instead of re-running the permutation search.
+  const currentRoutingPlan = useMemo(
+    () =>
+      getMemoizedRoutingPlan(
+        selectedPatient,
+        snapshot.tests,
+        snapshot.departments,
+        snapshot.queueTokens,
+        snapshot.counters
+      ),
+    [selectedPatient, snapshot.tests, snapshot.departments, snapshot.queueTokens, snapshot.counters]
+  );
 
   return {
     ...snapshot,

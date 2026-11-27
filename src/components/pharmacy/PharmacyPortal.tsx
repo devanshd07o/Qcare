@@ -13,7 +13,7 @@ import {
   ApiMedication,
   ApiDispenseRecord
 } from '../../api/client';
-import { useHospitalStore } from '../../store/useHospitalStore';
+import { useHospitalStore, belongsToHospital } from '../../store/useHospitalStore';
 import { Patient, Prescription } from '../../types';
 
 interface PharmacyPortalProps {
@@ -121,36 +121,18 @@ export const PharmacyPortal: React.FC<PharmacyPortalProps> = ({ pharmacistName, 
 
   // Scoped prescriptions & patients for the current hospital
   const hospitalScopedPatients = useMemo(
-    () =>
-      storePatients.filter(
-        p =>
-          (!p.hospitalId && !p.hospitalCode) ||
-          p.hospitalId === currentHospital.id ||
-          p.hospitalCode === currentHospital.code
-      ),
-    [storePatients, currentHospital.id, currentHospital.code]
+    () => storePatients.filter(p => belongsToHospital(p, currentHospital)),
+    [storePatients, currentHospital]
   );
 
   const hospitalScopedPrescriptions = useMemo(
-    () =>
-      storePrescriptions.filter(
-        rx =>
-          (!rx.hospitalId && !rx.hospitalCode) ||
-          rx.hospitalId === currentHospital.id ||
-          rx.hospitalCode === currentHospital.code
-      ),
-    [storePrescriptions, currentHospital.id, currentHospital.code]
+    () => storePrescriptions.filter(rx => belongsToHospital(rx, currentHospital)),
+    [storePrescriptions, currentHospital]
   );
 
   const hospitalScopedDispenses = useMemo(
-    () =>
-      storeDispenseRecords.filter(
-        d =>
-          (!d.hospitalId && !d.hospitalCode) ||
-          d.hospitalId === currentHospital.id ||
-          d.hospitalCode === currentHospital.code
-      ),
-    [storeDispenseRecords, currentHospital.id, currentHospital.code]
+    () => storeDispenseRecords.filter(d => belongsToHospital(d, currentHospital)),
+    [storeDispenseRecords, currentHospital]
   );
 
   // Quick-select roster of patients with prescriptions
@@ -284,14 +266,15 @@ export const PharmacyPortal: React.FC<PharmacyPortalProps> = ({ pharmacistName, 
       return;
     }
 
-    // Store-first local resolution (works for dynamic walk-ins & demo patients)
-    const matchedPatient = hospitalScopedPatients.find(
-      p =>
-        p.qrSessionId.toUpperCase() === query ||
-        p.uhid.toUpperCase() === query ||
-        p.opdTokenNumber.toUpperCase() === query ||
-        p.id.toUpperCase() === query
-    );
+    // Store-first local resolution: prioritize exact QR/UHID/ID before OPD token fallback
+    const matchedPatient =
+      hospitalScopedPatients.find(
+        p =>
+          p.qrSessionId.toUpperCase() === query ||
+          p.uhid.toUpperCase() === query ||
+          p.id.toUpperCase() === query
+      ) ||
+      hospitalScopedPatients.find(p => p.opdTokenNumber.toUpperCase() === query);
 
     if (matchedPatient) {
       openStorePatient(matchedPatient.id);

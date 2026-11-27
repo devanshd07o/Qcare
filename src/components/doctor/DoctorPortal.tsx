@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { useHospitalStore, getHospitalState, resolveIndianDoctorAvatar } from '../../store/useHospitalStore';
+import { useHospitalStore, getHospitalState, resolveIndianDoctorAvatar, belongsToHospital } from '../../store/useHospitalStore';
 import { REGISTERED_HOSPITALS } from '../../data/mockHospitalData';
 import { TRANSLATIONS } from '../../i18n/translations';
 import { PrintableSlip } from '../common/PrintableSlip';
@@ -115,12 +115,12 @@ export const DoctorPortal: React.FC = () => {
   const {
     currentHospital,
     currentUser,
-    patients,
+    patients: allPatients,
     tests,
     departments,
     counters,
-    queueTokens,
-    clinicalReports,
+    queueTokens: allQueueTokens,
+    clinicalReports: allClinicalReports,
     selectedPatientId,
     setSelectedPatientId,
     activeLanguage,
@@ -144,6 +144,19 @@ export const DoctorPortal: React.FC = () => {
   } = useHospitalStore();
 
   void TRANSLATIONS[activeLanguage];
+
+  const patients = useMemo(
+    () => allPatients.filter(p => belongsToHospital(p, currentHospital)),
+    [allPatients, currentHospital]
+  );
+  const queueTokens = useMemo(
+    () => allQueueTokens.filter(t => belongsToHospital(t, currentHospital)),
+    [allQueueTokens, currentHospital]
+  );
+  const clinicalReports = useMemo(
+    () => allClinicalReports.filter(r => belongsToHospital(r, currentHospital)),
+    [allClinicalReports, currentHospital]
+  );
 
   // ==========================================
   // SIDEBAR WORKSPACE NAVIGATION: 'dashboard' | 'walkin' | 'queue' | 'reports' | 'records'
